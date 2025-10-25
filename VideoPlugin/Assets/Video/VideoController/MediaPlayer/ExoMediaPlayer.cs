@@ -19,7 +19,7 @@ namespace GameApp.Media
     {
         public string m_VideoPath;
 
-        bool useFastOesPath = false;
+        bool useFastOesPath = true;
         bool showPosterFrame = false;
         public bool m_AutoStart = false;
 
@@ -796,14 +796,19 @@ namespace GameApp.Media
 		{
 			if (m_Video != null)
 			{
-			//	if (m_UseFastOesPath)
+				if (m_UseFastOesPath)
 				{
 					// This is needed for at least Unity 5.5.0, otherwise it just renders black in OES mode
 					GL.InvalidateState();
 				}
-            //    m_Video.Call<bool>("Render");
+                m_Video.Call<bool>("Render");
 
                 IssuePluginEvent(Native.ExoPlayerEvent.Render, m_iPlayerIndex);
+
+                if(m_UseFastOesPath)
+                {
+                    GL.InvalidateState();
+                }
 
 				// Check if we can create the texture
                 // Scan for a change in resolution
