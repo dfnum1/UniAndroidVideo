@@ -82,6 +82,54 @@ public class VideoPlayer
         filePath = url;
     }
 
+    public void Prepare(byte[] buffers)
+    {
+        ByteArrayDataSource byteArrayDataSource = new ByteArrayDataSource(buffers);
+        DataSource.Factory factory = new DataSource.Factory() {
+            @Override
+            public DataSource createDataSource() {
+                return byteArrayDataSource;
+            }
+        };
+        MediaSource videoSource = new ExtractorMediaSource.Factory(factory)
+            .setExtractorsFactory(new DefaultExtractorsFactory())
+            .createMediaSource(Uri.EMPTY);
+        if(videoSource == null)
+        {
+            Log.e(TAG, "Failed to create MediaSource from byte array");
+            return;
+        }
+
+        // 1. AudioEngine
+        if (engine == null)
+        {
+            engine = AudioEngine.create(SAMPLE_RATE, BUFFER_SIZE, QUEUE_SIZE_IN_SAMPLES, myContext);
+            spat = engine.createSpatDecoderQueue();
+            engine.start();
+        }
+
+        // 2. VideoSource type
+        DataSource.Factory dataSourceFactory = buildDataSourceFactory(myContext);
+        Uri uri = ParseFilePath();
+      //  MediaSource videoSource = buildMediaSource(myContext, uri, null, dataSourceFactory);
+        Log.d(TAG, "Requested play of " + filePath + " uri: " + uri.toString());
+
+        // 3. Exoplayer
+        if (exoPlayer != null)
+        {
+            exoPlayer.release();
+        }
+
+        exoPlayer = new SimpleExoPlayer.Builder(myContext).build(); // Pasarle trackSelector
+        AddPlayerListener();
+        if(mySurface!=null)exoPlayer.setVideoSurface(mySurface);
+        exoPlayer.setMediaSource(videoSource);
+        exoPlayer.prepare();
+
+        exoPlayer.setRepeatMode(Player.REPEAT_MODE_ONE);
+        exoPlayer.setPlayWhenReady(false);
+    }
+
     public void Prepare(Surface surface)
     {
         //send videoID and textureID back to unity to create external texture
