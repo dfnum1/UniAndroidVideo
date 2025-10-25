@@ -801,7 +801,7 @@ namespace GameApp.Media
 					// This is needed for at least Unity 5.5.0, otherwise it just renders black in OES mode
 					GL.InvalidateState();
 				}
-                m_Video.Call<bool>("Render");
+               // m_Video.Call<bool>("Render");
 
                 IssuePluginEvent(Native.ExoPlayerEvent.Render, m_iPlayerIndex);
 
