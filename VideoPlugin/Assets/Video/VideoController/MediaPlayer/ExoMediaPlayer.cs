@@ -35,13 +35,19 @@ namespace GameApp.Media
             ExoMediaPlayer m_pPlayer = null;
             public AndroidUnityMessage() : base("com/unity3d/exovideo/IUnityMessage") { }
 
-            public void CreateOESTexture(int textureID)
+            public void SetPlayer(ExoMediaPlayer player)
             {
+                m_pPlayer = player;
             }
 
-            public int CreateSizeOESTexture(int width, int height)
+            public void OnVideoRenderBegin(int playerIndex)
             {
-                return 0;
+                if (m_pPlayer != null) m_pPlayer.OnVideoRenderBegin(playerIndex);
+            }
+
+            public void OnVideoRenderEnd(int playerIndex)
+            {
+                if (m_pPlayer != null) m_pPlayer.OnVideoRenderEnd(playerIndex);
             }
 
             public void OnPlayWhenReadyChanged(bool playWhenReady, int reason) { Debug.LogWarning($"TUTAN EXOPLAYER EVENT OnPlayWhenReadyChanged({playWhenReady}, {(Native.ExoPlayer_PlayWhenReadyChangeReason)reason})"); }
@@ -91,6 +97,7 @@ namespace GameApp.Media
         protected int _defaultTextureAnisoLevel = 1;
 
 
+        protected bool m_bResumeCall = false;
         static int ms_VideoIndex = 0;
         AndroidJavaClass m_pSurfaceTextureClass;
         AndroidJavaClass m_pSurfaceViewClass;
@@ -209,7 +216,9 @@ namespace GameApp.Media
                 // 应用回到前台
                 if (m_WasPlayingOnPause)
                 {
+              //      if (m_Video != null) m_Video.Call("OnResume");
                     Play();
+                    m_bResumeCall = true;
                     m_WasPlayingOnPause = false;
                 }
             }
@@ -217,7 +226,6 @@ namespace GameApp.Media
         //-------------------------------------------------
         void Init(bool useFastOesPath, bool showPosterFrame)
 		{
-
 #if UNITY_ANDROID
 #if UNITY_EDITOR
 #else
@@ -231,6 +239,10 @@ namespace GameApp.Media
                 m_Video.Call("Initialise", MetalAPI.s_ActivityContext, m_iPlayerIndex);
                 CoreNavtive.SetVideoJavaClass(m_iPlayerIndex, 2);
                 SetOptions(useFastOesPath, showPosterFrame);
+
+                AndroidUnityMessage msg = new AndroidUnityMessage();
+                msg.SetPlayer(this);
+                m_Video.Call("SetUnityCallback", msg);
 
                 //m_Video.Call("RendererSetup");
                 IssuePluginEvent(Native.ExoPlayerEvent.Setup, m_iPlayerIndex);
@@ -816,6 +828,12 @@ namespace GameApp.Media
 		{
 			if (m_Video != null)
 			{
+                if(m_bResumeCall)
+                {
+                    m_bResumeCall = false;
+                    IssuePluginEvent(Native.ExoPlayerEvent.Resume, m_iPlayerIndex);
+                    return;
+                }
 				if (m_UseFastOesPath)
 				{
 					// This is needed for at least Unity 5.5.0, otherwise it just renders black in OES mode
@@ -868,6 +886,8 @@ namespace GameApp.Media
 
 						_playerDescription = "MediaPlayer";
 
+                        if (m_Texture != null) UnityEngine.Object.Destroy(m_Texture);
+
 						// NOTE: From Unity 5.4.m_fYaw when using OES textures, an error "OPENGL NATIVE PLUG-IN ERROR: GL_INVALID_OPERATION: Operation illegal in current state" will be logged.
 						// We assume this is because we're passing in TextureFormat.RGBA32 which isn't the true texture format.  This error should be safe to ignore.
 						m_Texture = Texture2D.CreateExternalTexture(m_Width, m_Height, TextureFormat.RGBA32, false, false, new System.IntPtr(textureHandle));
@@ -876,14 +896,16 @@ namespace GameApp.Media
 							ApplyTextureProperties(m_Texture);
 						}
 
+                        Debug.Log("ReCreateTexture");
+
                     }
                 }
 
-                Debug.Log(m_Width + "x" + m_Height + " TexHandle: " + textureHandle + " TexPtr: " + (m_Texture != null ? m_Texture.GetNativeTexturePtr().ToString() : "null"));
+              //  Debug.Log(m_Width + "x" + m_Height + " TexHandle: " + textureHandle + " TexPtr: " + (m_Texture != null ? m_Texture.GetNativeTexturePtr().ToString() : "null"));
 
                 {
-					if (m_Texture != null && textureHandle > 0)
-					{
+                    if (m_Texture != null && textureHandle > 0 && m_Texture.GetNativeTexturePtr() == System.IntPtr.Zero)
+                    {
 						//Debug.Log("RECREATING");
 						m_Texture.UpdateExternalTexture(new System.IntPtr(textureHandle));
 
@@ -901,12 +923,22 @@ namespace GameApp.Media
 			}
 		}
         //-------------------------------------------------
+        public void OnVideoRenderBegin(int playerIndex)
+        {
+            //Debug.Log("OnVideoRenderBegin:" + playerIndex);
+        }
+        //-------------------------------------------------
+        public void OnVideoRenderEnd(int playerIndex)
+        {
+           // Debug.Log("OnVideoRenderEnd:" + playerIndex);
+        }
+        //-------------------------------------------------
         public void OnRenderEvent(int eventId)
         {
             int eventType = (eventId >> 16) & 0xFFFF;
             int playerIndex = (eventId >> 8) & 0xFF;
             int gfxType = eventId & 0xFF;
-            Debug.Log("OnRenderEvent: " + ((Native.ExoPlayerEvent)eventType).ToString() + " PlayerIndex: " + playerIndex + " GfxType: " + gfxType);
+        //    Debug.Log("OnRenderEvent: " + ((Native.ExoPlayerEvent)eventType).ToString() + " PlayerIndex: " + playerIndex + " GfxType: " + gfxType);
             if (playerIndex != m_iPlayerIndex)
                 return;
 
@@ -915,14 +947,14 @@ namespace GameApp.Media
             {
                 case Native.ExoPlayerEvent.Prepare:
                     {
-                        Debug.Log("PrepareSurface");
+                  //      Debug.Log("PrepareSurface");
                         //m_Video.Call("AttackSurface");
                         if(m_AutoStart) Play();
                     }
                     break;
                 case Native.ExoPlayerEvent.Render:
                     {
-                            Debug.Log("UpdateSurfaceTexture");
+                     //       Debug.Log("UpdateSurfaceTexture");
                         //  m_Video.Call("UpdateSurfaceTexture");
                     }
                     break;
@@ -1120,6 +1152,7 @@ namespace GameApp.Media
                 Setup = 1,
                 Prepare,
                 Render,
+                Resume,
                 Destroy,
             }
             public enum ExoPlayer_PlaybackState

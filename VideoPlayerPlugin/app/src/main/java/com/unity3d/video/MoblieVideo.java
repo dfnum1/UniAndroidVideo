@@ -990,7 +990,8 @@ public class MoblieVideo
     }
     synchronized (this) {
       if ((this.m_iNumberFramesAvailable > 0) && (this.m_bVideo_RenderSurfaceCreated)
-          && (this.m_GlRender_Video != null)) {
+          && (this.m_GlRender_Video != null)) 
+        {
         int iNumFramesAvailable = this.m_iNumberFramesAvailable;
         if (this.m_bUseFastOesPath) {
           while (this.m_iNumberFramesAvailable > 0) {

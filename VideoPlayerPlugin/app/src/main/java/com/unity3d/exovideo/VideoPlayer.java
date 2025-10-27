@@ -315,11 +315,11 @@ public class VideoPlayer
     {
         if (exoPlayer != null)
         {
+            exoPlayer.clearVideoSurface();
             mySurface = surface;
             exoPlayer.setVideoSurface(surface);
-
-            Log.d(TAG, "AttackSurface " + width + "x" + height);
         }
+        Log.d(TAG, "AttackSurface " + width + "x" + height);
     }
 
     public void Play()
@@ -510,9 +510,10 @@ public class VideoPlayer
 
     private synchronized Cache getDownloadCache(Context context)
     {
+        //return ExoCacheSingleton.getCache(context);
         if (m_ExoPlayerUnity.downloadCache == null)
         {
-            File downloadContentDirectory = new File(getDownloadDirectory(context), "downloads");
+            File downloadContentDirectory = new File(getDownloadDirectory(context), "downloads_" + filePath.hashCode());
             m_ExoPlayerUnity.downloadCache = new SimpleCache(downloadContentDirectory, new NoOpCacheEvictor(), new ExoDatabaseProvider(context));
         }
         return m_ExoPlayerUnity.downloadCache;

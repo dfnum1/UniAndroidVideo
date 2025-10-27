@@ -42,13 +42,12 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
 
     float[] mSurfaceTextureMat = new float[16];
 
-    MoblieVideo_GlRender m_GlRender_Video;
-
     int m_TextureHandle =0;
 
     VideoPlayer videoPlayer;
     int m_nPlayIndex;
 
+    int m_iNumberFramesAvailable = 0;
     int m_nFrameCount = 0;
 
     boolean mNewFrameAvailable = false;
@@ -57,7 +56,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
 
     public static void OnRendererEvent(int eventID)
     {
-        Log.d(TAG, "OnRendererEventJava: " + eventID);
+      //  Log.d(TAG, "OnRendererEventJava: " + eventID);
         int eventType = (eventID >> 16) & 0xFFFF;
         int playerIndex = (eventID >> 8) & 0xFF;
         int gfxType = eventID & 0xFF;
@@ -65,6 +64,10 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
             RendererSetupPlayer(playerIndex, gfxType);
         else if(eventType == 3)
             RenderPlayer(playerIndex);
+        else if(eventType == 4)
+            RenderResume(playerIndex);    
+        else if(eventType == 5)
+            RenderDestroy(playerIndex);                        
     }
 
     private static ExoPlayerUnity GetClassForPlayerIndex(int playerIndex) 
@@ -79,12 +82,13 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
     }
     public static void RenderPlayer(int playerIndex) 
     {
-        Log.d(TAG, "RenderPlayer" + playerIndex);
+     //   Log.d(TAG, "RenderPlayer" + playerIndex);
         ExoPlayerUnity theClass;
         if ((theClass = GetClassForPlayerIndex(playerIndex)) != null) {
            theClass.Render();
         }
     }
+    
     public static void RendererSetupPlayer(int playerIndex, int iDeviceIndex)
     {
         Log.d(TAG, "RendererSetupPlayer" + playerIndex + " DeviceIndex:" + iDeviceIndex);
@@ -95,7 +99,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
             boolean bOverride = false;
             if(iDeviceIndex == 8)
             {
-                theClass.m_iOpenGLVersion = 3;  //opengles2.0
+                theClass.m_iOpenGLVersion = 2;  //opengles2.0
                 bOverride = true;
             }
             else if(iDeviceIndex == 11)//opengles3.0
@@ -105,7 +109,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
             }
             if(bOverride)
             {
-                theClass.m_bCanUseGLBindVertexArray = ((theClass.m_iOpenGLVersion > 2) && (Build.VERSION.SDK_INT >= 18));
+                theClass.m_bCanUseGLBindVertexArray = false;//((theClass.m_iOpenGLVersion > 2) && (Build.VERSION.SDK_INT >= 18));
             }
 
             {
@@ -114,23 +118,32 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
         }
     }
 
-    public void Initialise(Context context, int index, IUnityMessage _unityMessage)
+    public static void RenderResume(int playerIndex) 
     {
-        m_nFrameCount = 0;
-        if (videoPlayer == null)
-        {
-            m_nPlayIndex = index;
-            myContext = context;
-            unityMessage = _unityMessage;
-            Log.d(TAG, "Added video player :" + index);
-            if (s_AllPlayers == null) s_AllPlayers = new HashMap<Integer, ExoPlayerUnity>();
-            s_AllPlayers.put(Integer.valueOf(m_nPlayIndex), this);
-            
+        Log.d(TAG, "RenderResume" + playerIndex);
+        ExoPlayerUnity theClass;
+        if ((theClass = GetClassForPlayerIndex(playerIndex)) != null) {
+           theClass.Resume();
         }
+    }
+
+    public static void RenderDestroy(int playerIndex) 
+    {
+        Log.d(TAG, "RenderDestroy" + playerIndex);
+        ExoPlayerUnity theClass;
+        if ((theClass = GetClassForPlayerIndex(playerIndex)) != null) {
+           theClass.Destroy();
+        }
+    }
+
+    public void SetUnityCallback(IUnityMessage _unityMessage)
+    {
+        this.unityMessage = _unityMessage;
     }
 
     public void Initialise(Context context, int index)
     {
+        m_iNumberFramesAvailable =0;
         m_nFrameCount = 0;
         if (videoPlayer == null)
         {
@@ -153,6 +166,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
         if(myContext == null) return false;
         if(videoPlayer !=null) return false;
         m_nFrameCount = 0;
+        m_iNumberFramesAvailable =0;
         videoPlayer = new VideoPlayer(this,myContext, filePath);
         return true;
     }
@@ -187,6 +201,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
     public void Prepare()
     {
         m_nFrameCount = 0;
+        m_iNumberFramesAvailable =0;
         if (videoPlayer == null) return;
 
         if(surfaceTexture == null)
@@ -199,9 +214,49 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
             @Override
             public void run()
             {
+                if(mySurface!=null) mySurface.release();
+                mySurface = new Surface(surfaceTexture);
                 videoPlayer.Prepare(mySurface);
             }
         });
+    }
+
+    public void AttackSurface()
+    {
+        if (videoPlayer == null) return;
+        // set up exoplayer on main thread
+        getHandler().post(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                videoPlayer.AttackSurface(mySurface);
+            }
+        });
+    }
+
+    public void Resume()
+    {
+        if(videoPlayer == null)
+            return;
+        CreateExoSurface(GetWidth(), GetHeight());
+        if(GetWidth() >0 && GetHeight() >0)
+        {
+            mUnityTexture = new Texture2D(myContext, GetWidth(), GetHeight(), m_bCanUseGLBindVertexArray);
+            mFBO = new FBO(mUnityTexture);
+        }
+
+        getHandler().post(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                if(mySurface!=null) mySurface.release();
+                mySurface = new Surface(surfaceTexture);
+                videoPlayer.AttackSurface(mySurface);
+            }
+        });
+        Log.d(TAG, "Resume " + GetWidth() + "x" + GetHeight() + "   textid:" + m_TextureHandle);
     }
 
     public void Render()
@@ -213,7 +268,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
 
             if(surfaceTexture == null)
                 return;
-
+            
             UpdateSurfaceTexture();
         }
     }
@@ -222,18 +277,22 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
     {
         if (videoPlayer == null) return;
 
-        if(mNewFrameAvailable)
+        if(m_iNumberFramesAvailable>0 && mNewFrameAvailable)
         {
+            int iNumFramesAvailable = this.m_iNumberFramesAvailable;
             mNewFrameAvailable = false;
+            m_iNumberFramesAvailable =0;
             if (surfaceTexture != null)
             {
                 surfaceTexture.updateTexImage();
 
                 surfaceTexture.getTransformMatrix(mSurfaceTextureMat);
 
-                RenderScene(mSurfaceTextureMat, this.m_TextureHandle);
+                RenderScene(mSurfaceTextureMat, this.m_TextureHandle,m_iNumberFramesAvailable);
                 m_nFrameCount++;
                 if(m_nFrameCount >= 1000000) m_nFrameCount =1;
+
+               // Log.d(TAG, "RenderScene " + m_nPlayIndex + "   textid:" + m_TextureHandle);
             }
         }
     }
@@ -246,21 +305,27 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
         }
     }
 
-    void RenderScene(float[] stMatrix, int textureId)
+    void RenderScene(float[] stMatrix, int textureId, int numFrame)
     {
         try
         {
             if(mUnityTexture == null)
             {
-                mUnityTexture = new Texture2D(myContext, GetWidth(), GetHeight(), false);
+                mUnityTexture = new Texture2D(myContext, GetWidth(), GetHeight(), m_bCanUseGLBindVertexArray);
                 mFBO = new FBO(mUnityTexture);
             }
 
+            if(this.unityMessage!=null)
+                this.unityMessage.OnVideoRenderBegin(this.m_nPlayIndex);
+
             Matrix.setIdentityM(mSurfaceTextureMat, 0);
+
             mFBO.FBOBegin();
             GLES20.glViewport(0, 0, GetWidth(), GetHeight());
-            mTexture2DExt.draw(mSurfaceTextureMat);
+            mTexture2DExt.draw(mSurfaceTextureMat,false);
             mFBO.FBOEnd();
+            if(this.unityMessage!=null)
+                this.unityMessage.OnVideoRenderEnd(this.m_nPlayIndex);
         }
         catch (Exception e)
         {
@@ -273,20 +338,32 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
     {
         if (videoPlayer == null) return;
 
-        DestroyGlTexture();
-         mTexture2DExt = new Texture2DExt(myContext, 0,0,false);
+        DestroySurface();
+        DestroyGl();
+         mTexture2DExt = new Texture2DExt(myContext, 0,0,m_bCanUseGLBindVertexArray);
           surfaceTexture = new SurfaceTexture(mTexture2DExt.getTextureID());
           m_TextureHandle = mTexture2DExt.getTextureID();
         surfaceTexture.setDefaultBufferSize(width, height);
         surfaceTexture.setOnFrameAvailableListener(this);
-
-        mySurface = new Surface(surfaceTexture);
         Log.d(TAG, "CreateExoSurface " + width + "x" + height + "   textid:" + m_TextureHandle);
     }
 
     @Override
-    public void onFrameAvailable(SurfaceTexture surfaceTexture) {
-        mNewFrameAvailable = true;
+    public void onFrameAvailable(SurfaceTexture st) {
+        synchronized (this) {
+            if(st == this.surfaceTexture)
+            {
+                Log.d(TAG, "onFrameAvailable " + m_nPlayIndex);
+                mNewFrameAvailable = true;
+                m_iNumberFramesAvailable+=1;
+            }
+            else
+            {
+                Log.d(TAG, "onFrameAvailable !=");
+            }
+            return;
+        }
+       
     }
 
 
@@ -333,18 +410,17 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
             {
                 videoPlayer.Stop();
                 videoPlayer = null;
-                if(surfaceTexture!=null)surfaceTexture.release();
-                surfaceTexture = null;
-
-                if(mySurface!=null)mySurface.release();
-                mySurface = null;
-
-                DestroyGlTexture();
             }
         });
     }
 
-    private void DestroyGlTexture()
+    public void Destroy()
+    {
+        DestroySurface();
+        DestroyGl();
+    }    
+
+    private void DestroyGl()
     {
         if(mFBO!=null)mFBO.destory();
         mFBO = null;
@@ -354,6 +430,22 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
         mTexture2DExt = null;
         m_TextureHandle = 0;
     }
+
+    private void DestroySurface()
+    {
+        if(surfaceTexture!=null)
+        {
+            surfaceTexture.setOnFrameAvailableListener(null);
+            surfaceTexture.release();
+        }
+        surfaceTexture = null;
+
+        if(mySurface!=null)mySurface.release();
+        mySurface = null;
+
+        m_iNumberFramesAvailable =0;
+        mNewFrameAvailable = false;
+    }    
 
 
     ///// SETTERS //////

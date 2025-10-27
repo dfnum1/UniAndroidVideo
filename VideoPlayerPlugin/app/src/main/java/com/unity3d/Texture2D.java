@@ -186,11 +186,14 @@ public class Texture2D {
         mFragmentCode += "}\n";
     }
 
-    public void draw(float[] mvpMatrix) {
-        GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        Utils.checkGlError("glClearColor1");
-        GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);
-        Utils.checkGlError("glClearColor2");
+    public void draw(float[] mvpMatrix, boolean bClear) {
+        if(bClear)
+        {
+                GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                Utils.checkGlError("glClearColor1");
+                GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);
+                Utils.checkGlError("glClearColor2");
+        }
 
         GLES20.glUseProgram(mProgram);
 
@@ -293,6 +296,25 @@ public class Texture2D {
             tmps[0] = mTextureID;
             GLES20.glDeleteTextures(1, tmps, 0);
             mTextureID = 0;
+        }
+        
+        if (mProgram != 0) {
+        GLES20.glDeleteProgram(mProgram);
+        mProgram = 0;
+        }
+
+        // 可选：清理 buffer（Java 层）
+        if (vertexBuffer != null) {
+                vertexBuffer.clear();
+                vertexBuffer = null;
+        }
+        if (uvBuffer != null) {
+                uvBuffer.clear();
+                uvBuffer = null;
+        }
+        if (drawListBuffer != null) {
+                drawListBuffer.clear();
+                drawListBuffer = null;
         }
     }
 }

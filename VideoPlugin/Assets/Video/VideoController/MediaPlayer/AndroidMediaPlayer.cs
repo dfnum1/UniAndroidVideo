@@ -903,7 +903,7 @@ namespace GameApp.Media
                 }
 
 				{
-					if (m_Texture != null && textureHandle > 0 && m_Texture.GetNativeTexturePtr() == System.IntPtr.Zero)
+					if (m_Texture != null && textureHandle != 0)
 					{
 						//Debug.Log("RECREATING");
 						m_Texture.UpdateExternalTexture(new System.IntPtr(textureHandle));

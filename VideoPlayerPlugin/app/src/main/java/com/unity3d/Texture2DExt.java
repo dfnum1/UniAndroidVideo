@@ -61,18 +61,21 @@ public class Texture2DExt extends com.unity3d.Texture2D {
         mFragmentCode += "varying vec2 vTextureCoord;\n";
         mFragmentCode += "uniform samplerExternalOES sTexture;\n";
         mFragmentCode += "void main() {\n";
-        mFragmentCode += "  gl_FragColor = texture2D(sTexture, vTextureCoord);\n";
+        mFragmentCode += "  gl_FragColor = vec4(vTextureCoord.x,vTextureCoord.y,0,0)*0.1+texture2D(sTexture, vTextureCoord);\n";
         mFragmentCode += "}\n";
     }
 
     @Override
-    public void draw(float[] mvpMatrix) {
+    public void draw(float[] mvpMatrix, boolean bClear) {
 
 //        Log.d(TAG, "draw");
-        GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        Utils.checkGlError("glClearColor1");
-        GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);
-        Utils.checkGlError("glClearColor2");
+        if(bClear)
+        {
+                GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                Utils.checkGlError("glClearColor1");
+                GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);
+                Utils.checkGlError("glClearColor2");
+        }
         GLES20.glUseProgram(mProgram);
 
         int lastBindeVAO = 0;
@@ -84,7 +87,7 @@ public class Texture2DExt extends com.unity3d.Texture2D {
                 GLES30.glBindVertexArray(0);
         }        
 
-        // 一点要加这两行，不然会出现OUF OF MEMORY错误
+        // 一定要加这两行，不然会出现OUF OF MEMORY错误
         // http://forum.unity3d.com/threads/mixing-unity-with-native-opengl-drawing-on-android.134621/
         GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
@@ -124,16 +127,7 @@ public class Texture2DExt extends com.unity3d.Texture2D {
 //
 //        // Pass the projection and view transformation to the shader
         GLES20.glUniformMatrix4fv(mvpMatrixHandle, 1, false, mvpMatrix, 0);
-//
-////        int uSTMatrixHandle = GLES20.glGetUniformLocation(mProgram, "uSTMatrix");
-////        Utils.checkGlError("glGetUniformLocation uSTMatrixHandle");
-////
-////        float[] uSTMatrix = new float[16];
-////        Matrix.setIdentityM(uSTMatrix, 0);
-////        GLES20.glUniformMatrix4fv(uSTMatrixHandle, 1, false, uSTMatrix, 0);
-////        Utils.checkGlError("glUniformMatrix4fv uSTMatrixHandle");
-//
-//
+
 //        // Draw the square
 ////        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         GLES20.glDrawElements(
@@ -144,12 +138,7 @@ public class Texture2DExt extends com.unity3d.Texture2D {
         Utils.checkGlError("glDrawElements");
 //
 //        // Disable vertex array
-//        GLES20.glDisableVertexAttribArray(positionHandle);
-//        GLES20.glDisableVertexAttribArray(maTextureHandle);
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0);
-//        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
-//        GLES20.glEnable(GLES20.GL_DEPTH_TEST);
-//        Log.d(TAG, "draw finished");
 
         if(!m_CanUseGLBindVertexArray && lastBindeVAO!=0)
         {
