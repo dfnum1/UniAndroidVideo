@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.opengl.GLES20;
+import android.opengl.GLES30;
 import android.opengl.GLUtils;
 
 import java.io.IOException;
@@ -25,6 +26,8 @@ public class Texture2D {
 
     protected FloatBuffer vertexBuffer;
     protected ShortBuffer drawListBuffer;
+
+    protected boolean m_CanUseGLBindVertexArray = false;
 
     // number of coordinates per vertex in this array
     static final int COORDS_PER_VERTEX = 3;
@@ -56,8 +59,9 @@ public class Texture2D {
         mTextureID = textureID;
     }
 
-    public Texture2D(Context context, int width, int height) {
+    public Texture2D(Context context, int width, int height, boolean canVAO) {
         mContext = context;
+        m_CanUseGLBindVertexArray = canVAO;
         initVertex();
         initShader();
         createProgram();
@@ -86,7 +90,8 @@ public class Texture2D {
 
     }
 
-    public Texture2D(Context context, Bitmap bitmap) {
+    public Texture2D(Context context, Bitmap bitmap, boolean canVAO) {
+        m_CanUseGLBindVertexArray = canVAO;
         mContext = context;
         initVertex();
         initShader();
@@ -192,6 +197,15 @@ public class Texture2D {
 
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTextureID);
 
+        int lastBindeVAO = 0;
+        if(!m_CanUseGLBindVertexArray)
+        {
+                int[] lastVAO = new int[1];
+                GLES30.glGetIntegerv(GLES30.GL_VERTEX_ARRAY_BINDING, lastVAO, 0);
+                lastBindeVAO = lastVAO[0];
+                GLES30.glBindVertexArray(0);
+        }
+
         GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
         int positionHandle = GLES20.glGetAttribLocation(mProgram, "aPosition");
@@ -250,6 +264,11 @@ public class Texture2D {
         GLES20.glDisableVertexAttribArray(maTextureHandle);
         Utils.checkGlError("glDisableVertexAttribArray maTextureHandle");
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+
+        if(!m_CanUseGLBindVertexArray && lastBindeVAO!=0)
+        {
+            GLES30.glBindVertexArray(lastBindeVAO);
+        }
     }
 
     public int getTextureID() {

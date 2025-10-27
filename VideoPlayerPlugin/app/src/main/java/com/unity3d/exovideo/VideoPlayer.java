@@ -82,8 +82,9 @@ public class VideoPlayer
         filePath = url;
     }
 
-    public void Prepare(byte[] buffers)
+    public void PrepareBytes(byte[] buffers)
     {
+        /*
         ByteArrayDataSource byteArrayDataSource = new ByteArrayDataSource(buffers);
         DataSource.Factory factory = new DataSource.Factory() {
             @Override
@@ -128,6 +129,7 @@ public class VideoPlayer
 
         exoPlayer.setRepeatMode(Player.REPEAT_MODE_ONE);
         exoPlayer.setPlayWhenReady(false);
+        */
     }
 
     public void Prepare(Surface surface)

@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
+import android.opengl.GLES30;
 
 //import junit.framework.Assert;
 
@@ -14,8 +15,8 @@ public class Texture2DExt extends com.unity3d.Texture2D {
 
     private static final String TAG = Texture2DExt.class.getSimpleName();
 
-    public Texture2DExt(Context context, int width, int height) {
-        super(context, width, height);
+    public Texture2DExt(Context context, int width, int height, boolean canVAO) {
+        super(context, width, height,canVAO);
 
         mContext = context;
         initVertex();
@@ -47,8 +48,8 @@ public class Texture2DExt extends com.unity3d.Texture2D {
 
     }
 
-    public Texture2DExt(Context context, Bitmap bitmap) {
-        super(context, bitmap);
+    public Texture2DExt(Context context, Bitmap bitmap, boolean canVAO) {
+        super(context, bitmap, canVAO);
     }
 
 
@@ -73,6 +74,15 @@ public class Texture2DExt extends com.unity3d.Texture2D {
         GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);
         Utils.checkGlError("glClearColor2");
         GLES20.glUseProgram(mProgram);
+
+        int lastBindeVAO = 0;
+        if(!m_CanUseGLBindVertexArray)
+        {
+                int[] lastVAO = new int[1];
+                GLES30.glGetIntegerv(GLES30.GL_VERTEX_ARRAY_BINDING, lastVAO, 0);
+                lastBindeVAO = lastVAO[0];
+                GLES30.glBindVertexArray(0);
+        }        
 
         // 一点要加这两行，不然会出现OUF OF MEMORY错误
         // http://forum.unity3d.com/threads/mixing-unity-with-native-opengl-drawing-on-android.134621/
@@ -140,5 +150,10 @@ public class Texture2DExt extends com.unity3d.Texture2D {
 //        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
 //        GLES20.glEnable(GLES20.GL_DEPTH_TEST);
 //        Log.d(TAG, "draw finished");
+
+        if(!m_CanUseGLBindVertexArray && lastBindeVAO!=0)
+        {
+            GLES30.glBindVertexArray(lastBindeVAO);
+        }
     }
 }

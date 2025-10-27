@@ -18,7 +18,7 @@ namespace GameApp.Media
     {
         public string m_VideoPath;
 
-        bool useFastOesPath = true;
+        bool useFastOesPath = false;
         bool showPosterFrame = false;
         public bool m_AutoStart = false;
 
@@ -189,9 +189,30 @@ namespace GameApp.Media
 
 		}
         //-------------------------------------------------
-        void CreateExoSurfaceTexture(int width, int height)
+        private void OnApplicationPause(bool pauseStatus)
         {
-
+            if (pauseStatus)
+            {
+                // 应用进入后台
+                if (IsPlaying())
+                {
+                    m_WasPlayingOnPause = true;
+                    Pause();
+                }
+                else
+                {
+                    m_WasPlayingOnPause = false;
+                }
+            }
+            else
+            {
+                // 应用回到前台
+                if (m_WasPlayingOnPause)
+                {
+                    Play();
+                    m_WasPlayingOnPause = false;
+                }
+            }
         }
         //-------------------------------------------------
         void Init(bool useFastOesPath, bool showPosterFrame)
@@ -849,7 +870,7 @@ namespace GameApp.Media
 
 						// NOTE: From Unity 5.4.m_fYaw when using OES textures, an error "OPENGL NATIVE PLUG-IN ERROR: GL_INVALID_OPERATION: Operation illegal in current state" will be logged.
 						// We assume this is because we're passing in TextureFormat.RGBA32 which isn't the true texture format.  This error should be safe to ignore.
-						m_Texture = Texture2D.CreateExternalTexture(m_Width, m_Height, TextureFormat.RGBA32, false, true, new System.IntPtr(textureHandle));
+						m_Texture = Texture2D.CreateExternalTexture(m_Width, m_Height, TextureFormat.RGBA32, false, false, new System.IntPtr(textureHandle));
 						if (m_Texture != null)
 						{
 							ApplyTextureProperties(m_Texture);

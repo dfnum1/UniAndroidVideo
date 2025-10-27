@@ -1,5 +1,5 @@
 package com.unity3d.exovideo;
-
+import android.os.Build;
 import android.opengl.GLES20;
 import android.opengl.GLES30;
 import android.opengl.GLES11Ext; 
@@ -49,7 +49,11 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
     VideoPlayer videoPlayer;
     int m_nPlayIndex;
 
+    int m_nFrameCount = 0;
+
     boolean mNewFrameAvailable = false;
+    int m_iOpenGLVersion = 1;
+    boolean m_bCanUseGLBindVertexArray = false;
 
     public static void OnRendererEvent(int eventID)
     {
@@ -86,15 +90,33 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
         Log.d(TAG, "RendererSetupPlayer" + playerIndex + " DeviceIndex:" + iDeviceIndex);
                
         ExoPlayerUnity theClass;
-        if ((theClass = GetClassForPlayerIndex(playerIndex)) != null) {
+        if ((theClass = GetClassForPlayerIndex(playerIndex)) != null) 
         {
-            theClass.Prepare();
-        }
+            boolean bOverride = false;
+            if(iDeviceIndex == 8)
+            {
+                theClass.m_iOpenGLVersion = 3;  //opengles2.0
+                bOverride = true;
+            }
+            else if(iDeviceIndex == 11)//opengles3.0
+            {
+                theClass.m_iOpenGLVersion =3;
+                bOverride = true;
+            }
+            if(bOverride)
+            {
+                theClass.m_bCanUseGLBindVertexArray = ((theClass.m_iOpenGLVersion > 2) && (Build.VERSION.SDK_INT >= 18));
+            }
+
+            {
+                theClass.Prepare();
+            }
         }
     }
 
     public void Initialise(Context context, int index, IUnityMessage _unityMessage)
     {
+        m_nFrameCount = 0;
         if (videoPlayer == null)
         {
             m_nPlayIndex = index;
@@ -109,6 +131,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
 
     public void Initialise(Context context, int index)
     {
+        m_nFrameCount = 0;
         if (videoPlayer == null)
         {
             m_nPlayIndex = index;
@@ -129,6 +152,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
     {
         if(myContext == null) return false;
         if(videoPlayer !=null) return false;
+        m_nFrameCount = 0;
         videoPlayer = new VideoPlayer(this,myContext, filePath);
         return true;
     }
@@ -162,53 +186,56 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
 
     public void Prepare()
     {
+        m_nFrameCount = 0;
         if (videoPlayer == null) return;
+
+        if(surfaceTexture == null)
+         {
+            CreateExoSurface(GetWidth(), GetHeight());
+         }   
         // set up exoplayer on main thread
         getHandler().post(new Runnable()
         {
             @Override
             public void run()
             {
-                videoPlayer.Prepare(null);
+                videoPlayer.Prepare(mySurface);
             }
         });
     }
 
     public void Render()
     {
-         Log.d(TAG, "Render " + GetWidth() + "x" + GetHeight());
-
-        if(GetWidth() <=0 || GetHeight() <=0)
-         return;
-
-         if(surfaceTexture == null)
-         {
-            CreateExoSurface(GetWidth(), GetHeight());
+        synchronized(this)
+        {
+            if(GetWidth() <=0 || GetHeight() <=0)
             return;
-         }
-        UpdateSurfaceTexture();
+
+            if(surfaceTexture == null)
+                return;
+
+            UpdateSurfaceTexture();
+        }
     }
 
     public void UpdateSurfaceTexture()
     {
         if (videoPlayer == null) return;
-        Log.d(TAG, "UpdateSurfaceTexture " + GetWidth() + "x" + GetHeight());
 
         if(mNewFrameAvailable)
         {
-            Log.d(TAG, "UpdateSurfaceTexture NeFrame" + GetWidth() + "x" + GetHeight());
             mNewFrameAvailable = false;
-                    if (surfaceTexture != null)
-                    {
-                        surfaceTexture.updateTexImage();
+            if (surfaceTexture != null)
+            {
+                surfaceTexture.updateTexImage();
 
-                        surfaceTexture.getTransformMatrix(mSurfaceTextureMat);
+                surfaceTexture.getTransformMatrix(mSurfaceTextureMat);
 
-                        RenderScene(mSurfaceTextureMat, this.m_TextureHandle);
-                       long ts =  surfaceTexture.getTimestamp();
-                        Log.d("EXO", "updateTexImage ts=" + ts + " width=" + GetWidth() + " height=" + GetHeight());
-                    }
-                }
+                RenderScene(mSurfaceTextureMat, this.m_TextureHandle);
+                m_nFrameCount++;
+                if(m_nFrameCount >= 1000000) m_nFrameCount =1;
+            }
+        }
     }
 
     private void checkGlError(String op) {
@@ -221,17 +248,25 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
 
     void RenderScene(float[] stMatrix, int textureId)
     {
-        if(mUnityTexture == null)
+        try
         {
-            mUnityTexture = new Texture2D(myContext, GetWidth(), GetHeight());
-            mFBO = new FBO(mUnityTexture);
+            if(mUnityTexture == null)
+            {
+                mUnityTexture = new Texture2D(myContext, GetWidth(), GetHeight(), false);
+                mFBO = new FBO(mUnityTexture);
+            }
+
+            Matrix.setIdentityM(mSurfaceTextureMat, 0);
+            mFBO.FBOBegin();
+            GLES20.glViewport(0, 0, GetWidth(), GetHeight());
+            mTexture2DExt.draw(mSurfaceTextureMat);
+            mFBO.FBOEnd();
+        }
+        catch (Exception e)
+        {
+            Log.e(TAG, "RenderScene Exception: " + e.getMessage());
         }
 
-        Matrix.setIdentityM(mSurfaceTextureMat, 0);
-        mFBO.FBOBegin();
-        GLES20.glViewport(0, 0, GetWidth(), GetHeight());
-        mTexture2DExt.draw(mSurfaceTextureMat);
-        mFBO.FBOEnd();
     }
 
     public void CreateExoSurface(int width, int height)
@@ -239,40 +274,13 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
         if (videoPlayer == null) return;
 
         DestroyGlTexture();
-/* 
-        int[] textures = new int[1];
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-        GLES20.glGenTextures(1, textures, 0);
-        m_TextureHandle = textures[0];
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, m_TextureHandle);
-        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
-        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
-        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
-        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
-       // GLES20.glBindTexture( GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0 );
-
-        surfaceTexture = new SurfaceTexture(m_TextureHandle);
-        surfaceTexture.setDefaultBufferSize(width, height);
-        surfaceTexture.setOnFrameAvailableListener(this);
-
-        mySurface = new Surface(surfaceTexture);
-        */
-         mTexture2DExt = new Texture2DExt(myContext, 0,0);
+         mTexture2DExt = new Texture2DExt(myContext, 0,0,false);
           surfaceTexture = new SurfaceTexture(mTexture2DExt.getTextureID());
           m_TextureHandle = mTexture2DExt.getTextureID();
         surfaceTexture.setDefaultBufferSize(width, height);
         surfaceTexture.setOnFrameAvailableListener(this);
 
         mySurface = new Surface(surfaceTexture);
-
-        getHandler().post(new Runnable()
-        {
-                @Override
-                public void run()
-                {
-                    videoPlayer.AttackSurface(mySurface);
-                }
-        }); 
         Log.d(TAG, "CreateExoSurface " + width + "x" + height + "   textid:" + m_TextureHandle);
     }
 
@@ -376,6 +384,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
     {
         return videoPlayer !=null;
     }
+
 
     public void SetPlaybackPosition(final double percent)
     {
@@ -493,11 +502,8 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
 
     public int GetFrameCount()
     {
-        if(videoPlayer == null) return 0;
-        double positionMs   = GetPlaybackPosition()*GetLength();
-        double frameRate    = 30;
-        int currentFrame = (int)(positionMs * frameRate);
-        return currentFrame;
+        if(videoPlayer == null || !GetIsPlaying()) return 0;
+        return m_nFrameCount;
     }
 
     public void SetVolume(float volume)
