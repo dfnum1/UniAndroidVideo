@@ -353,7 +353,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
         synchronized (this) {
             if(st == this.surfaceTexture)
             {
-                Log.d(TAG, "onFrameAvailable " + m_nPlayIndex);
+             //   Log.d(TAG, "onFrameAvailable " + m_nPlayIndex);
                 mNewFrameAvailable = true;
                 m_iNumberFramesAvailable+=1;
             }

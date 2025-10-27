@@ -191,7 +191,7 @@ MonoBehaviour:
   bPersistentPath: 0
   bErasure: 0
   erasureColor: {r: 0, g: 1, b: 0, a: 0}
-  delayPlay: 1
+  delayPlay: 0
   defaultShow: {fileID: 0}
 --- !u!222 &677245940
 CanvasRenderer:

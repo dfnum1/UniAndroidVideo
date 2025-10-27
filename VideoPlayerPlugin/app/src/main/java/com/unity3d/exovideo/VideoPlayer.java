@@ -308,7 +308,7 @@ public class VideoPlayer
             height = 0;
         }
 
-         Log.d(TAG, "updatePlaybackState " + width + "x" + height);
+     //    Log.d(TAG, "updatePlaybackState " + width + "x" + height);
     }
 
     public void AttackSurface(Surface surface)

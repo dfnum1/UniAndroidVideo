@@ -221,15 +221,6 @@ static void UNITY_INTERFACE_API OnRenderEvent(int eventID)
             g_InvBridgeInterface.pRenderEvent(eventID);
 
         return;
-    }    
-
-    if(eventType == 2)
-    {
-   //     CreateSurfaceTexture(playerIndex);
-    }
-    else if(eventType == 3)
-    {
-    //    UpdateSurfaceTexture(playerIndex);
     }
 
     jclass videoClass = findClass("com.unity3d.PluginJNI");

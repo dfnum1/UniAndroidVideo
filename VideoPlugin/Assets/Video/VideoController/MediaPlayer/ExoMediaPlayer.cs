@@ -4,8 +4,7 @@
 作    者:	HappLI
 描    述:	window 系统视频播放
 *********************************************************************/
-using GameApp.UIComponent;
-using System;
+#if UNITY_ANDROID && !UNITY_EDITOR
 using System.Collections;
 using System.Runtime.InteropServices;
 using UnityEngine;
@@ -50,8 +49,14 @@ namespace GameApp.Media
                 if (m_pPlayer != null) m_pPlayer.OnVideoRenderEnd(playerIndex);
             }
 
-            public void OnPlayWhenReadyChanged(bool playWhenReady, int reason) { Debug.LogWarning($"TUTAN EXOPLAYER EVENT OnPlayWhenReadyChanged({playWhenReady}, {(Native.ExoPlayer_PlayWhenReadyChangeReason)reason})"); }
-            public void OnPlaybackStateChanged(int playbackState) { Debug.LogWarning($"TUTAN EXOPLAYER EVENT OnPlaybackStateChanged({(Native.ExoPlayer_PlaybackState)playbackState})"); }
+            public void OnPlayWhenReadyChanged(bool playWhenReady, int reason)
+            { 
+                //Debug.LogWarning($"TUTAN EXOPLAYER EVENT OnPlayWhenReadyChanged({playWhenReady}, {(Native.ExoPlayer_PlayWhenReadyChangeReason)reason})");
+            }
+            public void OnPlaybackStateChanged(int playbackState)
+            {
+                //Debug.LogWarning($"TUTAN EXOPLAYER EVENT OnPlaybackStateChanged({(Native.ExoPlayer_PlaybackState)playbackState})");
+            }
         }
 
         public MediaPlayerEvent Events
@@ -1173,3 +1178,4 @@ namespace GameApp.Media
         }
     }
 }
+#endif

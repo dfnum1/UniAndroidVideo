@@ -196,8 +196,6 @@ namespace GameApp.Media
         //    video.hideFlags |= HideFlags.HideAndDontSave;
             video.transform.SetParent(m_pVideoRoot.transform);
 
-            return video.AddComponent<ExoMediaPlayer>();
-           return video.AddComponent<AndroidMediaPlayer>();
 #if USE_AVPRO
             return video.AddComponent<AVProVideoPlayer>();
 #endif
@@ -206,6 +204,7 @@ namespace GameApp.Media
             return video.AddComponent<UnityMediaPlayer>();
             //return video.AddComponent<WindowsMediaPlayer>();
 #elif !UNITY_EDITOR && UNITY_ANDROID
+             return video.AddComponent<ExoMediaPlayer>();
              //return video.AddComponent<UnityMediaPlayer>();
              return video.AddComponent<AndroidMediaPlayer>();
 #else
