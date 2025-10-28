@@ -194,11 +194,9 @@ namespace GameApp.UIComponent
                 color.a = 1.0f;
                 defaultShow.color = color;
             }
-//#if USE_AVPRO
-//            material.EnableKeyword("USE_AVPRO");
-//#else
-//            material.DisableKeyword("USE_AVPRO");
-//#endif
+            string shaderDefines = VideoController.GetMaterialDefines();
+            if (!string.IsNullOrEmpty(shaderDefines))
+                material.EnableKeyword(shaderDefines);
             m_VideoPlayer = VideoController.PlayVideo(this.m_strUrl, this.m_bPersistentPath);
             if (m_VideoPlayer != null)
             {

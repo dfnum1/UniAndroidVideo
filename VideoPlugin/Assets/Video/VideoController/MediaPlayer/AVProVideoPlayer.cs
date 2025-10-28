@@ -4,11 +4,15 @@
 作    者:	HappLI
 描    述:	基于AVPro 插件的视频播放组件
 *********************************************************************/
-//#define USE_AVPRO
+#if UNITY_ANDROID && !UNITY_EDITOR
+#else
+#define USE_AVPRO
+#endif
 #if USE_AVPRO
 using UnityEngine;
 using UnityEngine.Video;
 using System.IO;
+using RenderHeads.Media.AVProVideo;
 
 namespace GameApp.Media
 {

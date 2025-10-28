@@ -4,7 +4,11 @@
 作    者:	HappLI
 描    述:	视频播放控制器模块
 *********************************************************************/
-//#define USE_AVPRO
+#if UNITY_ANDROID && !UNITY_EDITOR
+#else
+#define USE_AVPRO
+#endif
+
 using UnityEngine;
 using System.Collections.Generic;
 using System.IO;
@@ -187,6 +191,15 @@ namespace GameApp.Media
                 GameObject.Destroy(behaviour.gameObject);
 #endif
             }
+        }
+        //------------------------------------------------------
+        public static string GetMaterialDefines()
+        {
+#if USE_AVPRO
+            return "USE_AVPRO";
+#else
+            return null;
+#endif
         }
         //------------------------------------------------------
         IMediaPlayer NewMediaPlayer()

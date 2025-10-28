@@ -60,44 +60,54 @@
     <Analyzer Include="D:\Program Files\Unity 2022.3.62f2\Editor\Data\Tools\Unity.SourceGenerators\Unity.Properties.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Players\WebGLMediaPlayer.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_OpenBuffer.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_ExtractFrame.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Players\AndroidMediaPlayer.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\AudioChannelMixer.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\AudioOutput.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Tracks.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_OpenStream.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\TextTrack.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Utils\KeyAuthData.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_Events.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Helper.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Players\WindowsRtMediaPlayer.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\DisplayIMGUI.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\UpdateMultiPassStereo.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\ApplyToBase.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Players\WindowsMediaPlayer.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Utils\HttpHeader.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_EditorPlayPause.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\AudioOutputManager.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Players\PlatformMediaPlayer+Native.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\ApplyToMaterial.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Players\WebGLMediaPlayer.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\TimedMetadata.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Utils\VideoRender.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Players\AppleMediaPlayer.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_OpenBuffer.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_ExtractFrame.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Utils\Resampler.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Players\PlatformMediaPlayer.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_Subtitles.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\AssetTypes\MediaReference.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\ResolveToRenderTexture.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_AppFocus.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\PlaybackQualityStats.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\ApplyToMesh.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\AudioChannelMixer.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\AudioOutput.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Tracks.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\BaseMediaPlayer.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_OpenStream.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\ApplyToFarPlane_CameraApplier.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\ApplyToFarPlane.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_Upgrade.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Utils\Subtitles.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Events.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\TextTrack.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Players\WindowsMediaPlayer_BufferedFrames.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_PlatformOptions.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Interfaces.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Utils\KeyAuthData.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Players\PlatformMediaPlayerExtensions.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_Events.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Helper.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\PlaylistMediaPlayer.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Players\WindowsRtMediaPlayer.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Players\NullMediaPlayer.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\DisplayIMGUI.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_EditorMute.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Utils\Easing.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_TimeScale.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\UpdateMultiPassStereo.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Variants.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\ApplyToBase.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Players\WindowsMediaPlayer.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\AVProVideo\Runtime\Plugins\WSA\UWP\ARM64\AVProVideo.dll" />
@@ -105,11 +115,12 @@
     <None Include="Assets\AVProVideo\Runtime\Plugins\WSA\UWP\x86_64\AVProVideoWinRT.dll" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\Resources\AVProVideo-Internal-UI-Default-Stereo.shader" />
     <None Include="Assets\AVProVideo\Runtime\Plugins\Windows\x86\Audio360.dll" />
-    <None Include="Assets\AVProVideo\Runtime\Plugins\Android\libsamplerate-License.txt" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\Resources\AVProVideo-Internal-IMGUI-Transparent.shader" />
+    <None Include="Assets\AVProVideo\Runtime\Shaders\AVProVideo-Unlit-Transparent-AndroidOES.shader" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\AVProVideo-VR-InsideSphere-AndroidOES.shader" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\Resources\AVProVideo-Internal-Transition.shader" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\Resources\AVProVideo-Internal-UI-Default-Transparent.shader" />
+    <None Include="Assets\AVProVideo\Runtime\Shaders\Resources\AVProVideo-Internal-UI-Default-Transparent-Android OES.shader" />
     <None Include="Assets\AVProVideo\Runtime\Plugins\WSA\UWP\x86\AVProVideo.dll" />
     <None Include="Assets\AVProVideo\Runtime\Plugins\WSA\UWP\x86\Audio360.dll" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\AVProVideo-Lit-Transparent-Diffuse.shader" />
@@ -132,13 +143,16 @@
     <None Include="Assets\AVProVideo\Runtime\Shaders\AVProVideo-Unlit-AndroidOES.shader" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\AVProVideo-Unlit.shader" />
     <None Include="Assets\AVProVideo\Runtime\_AVProVideo.Runtime.asmdef" />
+    <None Include="Assets\AVProVideo\Runtime\Shaders\Resources\AVProVideo-Internal-Blit.shader" />
     <None Include="Assets\AVProVideo\Runtime\Plugins\WSA\UWP\ARM\AVProVideoWinRT.dll" />
     <None Include="Assets\AVProVideo\Runtime\Plugins\WSA\UWP\ARM64\AVProVideoWinRT.dll" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\Resources\AVProVideo-Internal-Preview.shader" />
     <None Include="Assets\AVProVideo\Runtime\Plugins\WSA\UWP\x86\AVProVideoWinRT.dll" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\AVProVideo-Unlit-Transparent.shader" />
+    <None Include="Assets\AVProVideo\Runtime\Shaders\AVProVideo-Skybox-Sphere-AndroidOES.shader" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\Resources\AVProVideo-Internal-BlendFrames.shader" />
     <None Include="Assets\AVProVideo\Runtime\Plugins\Windows\x86_64\Audio360.dll" />
+    <None Include="Assets\AVProVideo\Runtime\Shaders\Resources\AVProVideo-Internal-ResolveOES.shader" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">
@@ -477,40 +491,24 @@
       <HintPath>D:\Program Files\Unity 2022.3.62f2\Editor\Data\PlaybackEngines\WindowsStandaloneSupport\UnityEditor.WindowsStandalone.Extensions.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="Unity.VisualScripting.YamlDotNet">
-      <HintPath>Library\PackageCache\com.unity.visualscripting@1.8.0\Editor\VisualScripting.Core\Dependencies\YamlDotNet\Unity.VisualScripting.YamlDotNet.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="ReportGeneratorMerged">
       <HintPath>Library\PackageCache\com.unity.testtools.codecoverage@1.2.6\lib\ReportGenerator\ReportGeneratorMerged.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="unityplastic">
+      <HintPath>Library\PackageCache\com.unity.collab-proxy@2.7.1\Lib\Editor\unityplastic.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Unity.Plastic.Antlr3.Runtime">
-      <HintPath>Library\PackageCache\com.unity.collab-proxy@2.0.0\Lib\Editor\PlasticSCM\Unity.Plastic.Antlr3.Runtime.dll</HintPath>
+      <HintPath>Library\PackageCache\com.unity.collab-proxy@2.7.1\Lib\Editor\Unity.Plastic.Antlr3.Runtime.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.Plastic.Newtonsoft.Json">
-      <HintPath>Library\PackageCache\com.unity.collab-proxy@2.0.0\Lib\Editor\PlasticSCM\Unity.Plastic.Newtonsoft.Json.dll</HintPath>
+      <HintPath>Library\PackageCache\com.unity.collab-proxy@2.7.1\Lib\Editor\Unity.Plastic.Newtonsoft.Json.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="log4netPlastic">
-      <HintPath>Library\PackageCache\com.unity.collab-proxy@2.0.0\Lib\Editor\PlasticSCM\log4netPlastic.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Unity.VisualScripting.IonicZip">
-      <HintPath>Library\PackageCache\com.unity.visualscripting@1.8.0\Editor\VisualScripting.Core\Dependencies\DotNetZip\Unity.VisualScripting.IonicZip.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Unity.VisualScripting.Antlr3.Runtime">
-      <HintPath>Library\PackageCache\com.unity.visualscripting@1.8.0\Runtime\VisualScripting.Flow\Dependencies\NCalc\Unity.VisualScripting.Antlr3.Runtime.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Unity.VisualScripting.TextureAssets">
-      <HintPath>Library\PackageCache\com.unity.visualscripting@1.8.0\Editor\VisualScripting.Core\EditorAssetResources\Unity.VisualScripting.TextureAssets.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="unityplastic">
-      <HintPath>Library\PackageCache\com.unity.collab-proxy@2.0.0\Lib\Editor\PlasticSCM\unityplastic.dll</HintPath>
+      <HintPath>Library\PackageCache\com.unity.collab-proxy@2.7.1\Lib\Editor\log4netPlastic.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEditor.iOS.Extensions.Xcode">
