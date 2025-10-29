@@ -36,7 +36,8 @@ struct SInvBridgeInterface
 SInvBridgeInterface g_InvBridgeInterface;
 
 static JavaVM* gJvm = nullptr;
-static jobject gClassLoader;
+static jobject gClassLoader = nullptr;
+static jclass gVideoClass = nullptr;
 static jmethodID gFindClassMethod;
 
 struct SSurfaceTextureInfo
@@ -86,6 +87,8 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *pjvm, void *reserved)
     jmethodID getClassLoaderMethod = env->GetMethodID(videoObject, "getClassLoader","()Ljava/lang/ClassLoader;");
     gClassLoader = env->NewGlobalRef(env->CallObjectMethod(videoClass, getClassLoaderMethod));
     gFindClassMethod = env->GetMethodID(classLoaderClass, "findClass","(Ljava/lang/String;)Ljava/lang/Class;");
+    gVideoClass = (jclass)env->NewGlobalRef(videoClass);
+    env->DeleteLocalRef(videoClass);
     return JNI_VERSION_1_6;
 }
 
@@ -184,7 +187,7 @@ static void CreateSurfaceTexture(int playerIndex)
     env->DeleteLocalRef(surfaceClass);
 
     // Get the method to pass the Surface object to the videoPlayer
-    jclass videoClass = findClass("com.unity3d.PluginJNI");
+    jclass videoClass = gVideoClass;
     int textureNum = (int)textureID;
     jmethodID playVideoMethodID = env->GetStaticMethodID(videoClass, "CreateSurface", "(Landroid/view/Surface;III)V");
     // Pass the JNI Surface object to the videoPlayer with video and texture ID
@@ -223,7 +226,7 @@ static void UNITY_INTERFACE_API OnRenderEvent(int eventID)
         return;
     }
 
-    jclass videoClass = findClass("com.unity3d.PluginJNI");
+    jclass videoClass = gVideoClass;
     auto env = getEnv();
     jmethodID playVideoMethodID = env->GetStaticMethodID(videoClass, "OnRendererEvent", "(II)V");
         env->CallStaticVoidMethod(videoClass, playVideoMethodID, eventID, it->second->classId);

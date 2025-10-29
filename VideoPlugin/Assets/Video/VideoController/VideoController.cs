@@ -130,7 +130,6 @@ namespace GameApp.Media
         public static void StopVideo(IMediaPlayer mediaPlayer)
         {
             if (ms_pInstance == null || mediaPlayer == null) return;
-            mediaPlayer.Stop();
             ms_pInstance.FreeMediaPlayer(mediaPlayer);
             ms_pInstance.m_vVideos.Remove(mediaPlayer);
         }

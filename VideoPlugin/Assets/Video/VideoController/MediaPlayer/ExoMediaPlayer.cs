@@ -245,9 +245,9 @@ namespace GameApp.Media
                 CoreNavtive.SetVideoJavaClass(m_iPlayerIndex, 2);
                 SetOptions(useFastOesPath, showPosterFrame);
 
-                AndroidUnityMessage msg = new AndroidUnityMessage();
-                msg.SetPlayer(this);
-                m_Video.Call("SetUnityCallback", msg);
+            //    AndroidUnityMessage msg = new AndroidUnityMessage();
+            //    msg.SetPlayer(this);
+            //    m_Video.Call("SetUnityCallback", msg);
 
                 //m_Video.Call("RendererSetup");
                 IssuePluginEvent(Native.ExoPlayerEvent.Setup, m_iPlayerIndex);
