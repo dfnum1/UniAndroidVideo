@@ -984,12 +984,12 @@ namespace GameApp.Media
         public void OnEnable()
 		{
             if (m_Video == null) return;
-            int textureHandle = m_Video.Call<int>("GetTextureHandle");
-			if (m_Texture != null && textureHandle > 0 && m_Texture.GetNativeTexturePtr() == System.IntPtr.Zero)
-			{
-				//Debug.Log("RECREATING");
-				m_Texture.UpdateExternalTexture(new System.IntPtr(textureHandle));
-			}
+        //    int textureHandle = m_Video.Call<int>("GetTextureHandle");
+		//	if (m_Texture != null && textureHandle > 0 && m_Texture.GetNativeTexturePtr() == System.IntPtr.Zero)
+		//	{
+		//		//Debug.Log("RECREATING");
+		//		m_Texture.UpdateExternalTexture(new System.IntPtr(textureHandle));
+		//	}
 		}
         //-------------------------------------------------
         public void Update()
@@ -1116,6 +1116,11 @@ namespace GameApp.Media
 		{
 			return false;
 		}
+        //------------------------------------------------------
+        private void OnDestroy()
+        {
+            Dispose();
+        }
         //-------------------------------------------------
         public void Dispose()
 		{

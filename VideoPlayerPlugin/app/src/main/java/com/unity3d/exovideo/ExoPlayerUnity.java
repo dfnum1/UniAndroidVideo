@@ -416,6 +416,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
 
     public void Destroy()
     {
+        Stop();
         DestroySurface();
         DestroyGl();
     }    

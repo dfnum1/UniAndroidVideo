@@ -82,8 +82,8 @@
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\AudioOutput.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\Tracks.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Internal\BaseMediaPlayer.cs" />
-    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_OpenStream.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer.cs" />
+    <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_OpenStream.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\ApplyToFarPlane_CameraApplier.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\ApplyToFarPlane.cs" />
     <Compile Include="Assets\AVProVideo\Runtime\Scripts\Components\MediaPlayer_Upgrade.cs" />

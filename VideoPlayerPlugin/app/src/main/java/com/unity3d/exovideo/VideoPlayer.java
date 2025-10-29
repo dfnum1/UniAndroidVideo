@@ -32,8 +32,8 @@ import com.google.android.exoplayer2.upstream.cache.CacheDataSource;
 import com.google.android.exoplayer2.upstream.cache.NoOpCacheEvictor;
 import com.google.android.exoplayer2.upstream.cache.SimpleCache;
 import com.google.android.exoplayer2.util.Util;
-import com.twobigears.audio360.AudioEngine;
-import com.twobigears.audio360.SpatDecoderQueue;
+//import com.twobigears.audio360.AudioEngine;
+//import com.twobigears.audio360.SpatDecoderQueue;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.PlaybackException;
 import com.google.android.exoplayer2.Timeline;
@@ -44,6 +44,9 @@ import com.google.android.exoplayer2.video.VideoSize;
 import com.google.android.exoplayer2.source.TrackGroupArray;
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
 import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 public class VideoPlayer
 {
@@ -55,8 +58,8 @@ public class VideoPlayer
     private Surface mySurface;
     private Context myContext;
     private SimpleExoPlayer exoPlayer;
-    private AudioEngine engine;
-    private SpatDecoderQueue spat;
+  //  private AudioEngine engine;
+  //  private SpatDecoderQueue spat;
     private String filePath;
     private boolean readyToPlay;
     private volatile boolean isPlaying;
@@ -139,12 +142,12 @@ public class VideoPlayer
         mySurface = surface;
 
         // 1. AudioEngine
-        if (engine == null)
-        {
-            engine = AudioEngine.create(SAMPLE_RATE, BUFFER_SIZE, QUEUE_SIZE_IN_SAMPLES, myContext);
-            spat = engine.createSpatDecoderQueue();
-            engine.start();
-        }
+       // if (engine == null)
+       // {
+       //     engine = AudioEngine.create(SAMPLE_RATE, BUFFER_SIZE, QUEUE_SIZE_IN_SAMPLES, myContext);
+       //     spat = engine.createSpatDecoderQueue();
+       //     engine.start();
+        //}
 
         // 2. VideoSource type
         DataSource.Factory dataSourceFactory = buildDataSourceFactory(myContext);
@@ -342,18 +345,20 @@ public class VideoPlayer
     {
         if (exoPlayer != null)
         {
+            Log.d(TAG, "Requested stop of " + filePath);
             exoPlayer.stop();
             exoPlayer.release();
             exoPlayer = null;
         }
 
-        if (engine != null)
-        {
-            engine.destroySpatDecoderQueue(spat);
-            engine.delete();
-            spat = null;
-            engine = null;
-        }
+      //  if (engine != null)
+      //  {
+      //      engine.stop();
+      //      engine.destroySpatDecoderQueue(spat);
+       //     engine.delete();
+       //     spat = null;
+       //     engine = null;
+       // }
     }
 
     public int GetWidth()
@@ -479,7 +484,7 @@ public class VideoPlayer
     public void SetVolume(final float volume)
     {
         if(exoPlayer == null) return;
-      //  exoPlayer.SetVolume(volume);
+        exoPlayer.setVolume(volume);
     }
 
     /**
@@ -513,7 +518,8 @@ public class VideoPlayer
         //return ExoCacheSingleton.getCache(context);
         if (m_ExoPlayerUnity.downloadCache == null)
         {
-            File downloadContentDirectory = new File(getDownloadDirectory(context), "downloads_" + filePath.hashCode());
+            String ts = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new java.util.Date());;
+            File downloadContentDirectory = new File(getDownloadDirectory(context), "downloads_" + filePath.hashCode() + "_" + ts);
             m_ExoPlayerUnity.downloadCache = new SimpleCache(downloadContentDirectory, new NoOpCacheEvictor(), new ExoDatabaseProvider(context));
         }
         return m_ExoPlayerUnity.downloadCache;

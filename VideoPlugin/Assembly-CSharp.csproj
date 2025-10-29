@@ -66,6 +66,7 @@
     <Compile Include="Assets\Video\VideoController\MediaPlayer\MediaPlayer.cs" />
     <Compile Include="Assets\Video\UIVideo.cs" />
     <Compile Include="Assets\Video\VideoController\VideoController.cs" />
+    <Compile Include="Assets\NewBehaviourScript.cs" />
     <Compile Include="Assets\Video\VideoController\MediaPlayer\AVProVideoPlayer.cs" />
     <Compile Include="Assets\Video\TestUIVideo.cs" />
     <Compile Include="Assets\Video\VideoController\MediaPlayer\UnityMediaPlayer.cs" />
