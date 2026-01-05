@@ -6,7 +6,7 @@
 *********************************************************************/
 #if UNITY_ANDROID && !UNITY_EDITOR
 #else
-#define USE_AVPRO
+//#define USE_AVPRO
 #endif
 
 using UnityEngine;

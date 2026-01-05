@@ -139,7 +139,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &424369395
 RectTransform:
   m_ObjectHideFlags: 0
@@ -235,8 +235,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -4, y: 87.87024}
-  m_SizeDelta: {x: 279.4456, y: 407.151}
+  m_AnchoredPosition: {x: -157, y: -35.774}
+  m_SizeDelta: {x: 595.4268, y: 654.4404}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &677245939
 MonoBehaviour:
@@ -250,8 +250,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 89f51db2bd6516042a51e1160a4f2296, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Material: {fileID: 2100000, guid: b117eae72e01282428becb00542c6a55, type: 2}
-  m_Color: {r: 0, g: 1, b: 0, a: 0}
+  m_Material: {fileID: 2100000, guid: 1ecc1d3534ffdca408a5377d7e48672d, type: 2}
+  m_Color: {r: 0.054901965, g: 0.72156864, b: 0.04705883, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -265,11 +265,11 @@ MonoBehaviour:
     y: 0
     width: 1
     height: 1
-  url: EmergencyUI_Demo.mp4
+  url: Fg_Dremio_Wakeup.mp4
   bLoop: 1
   bPersistentPath: 0
-  bErasure: 0
-  erasureColor: {r: 0, g: 1, b: 0, a: 0}
+  bErasure: 1
+  erasureColor: {r: 0.054901965, g: 0.72156864, b: 0.04705883, a: 0}
   delayPlay: 0
   defaultShow: {fileID: 0}
 --- !u!222 &677245940

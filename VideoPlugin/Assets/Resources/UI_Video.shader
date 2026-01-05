@@ -3,9 +3,13 @@ Shader "UI/UI_Video"
     Properties
     {
         [HideInInspector]_MainTex ("Texture", 2D) = "white" {}
-        _Tolerance ("Tolerance", Range(0, 1)) = 0.7
-        _Smoothing ("Smoothing", Range(0, 1)) = 0.1
-        _Desaturation ("Desaturation", Range(0, 1)) = 0
+        _ColorCutoff("图像阈值", Range(0, 1)) = 0.05
+        _ColorFeathering("图像羽化", Range(0, 1)) = 0.15
+        _MaskFeathering("抠色羽化", Range(0, 1)) = 1
+        _Sharpening("锐度", Range(0, 1)) = 0.5
+		
+	//	_Despill("DespillStrength", Range(0, 1)) = 1
+    //    _DespillLuminanceAdd("DespillLuminanceAdd", Range(0, 1)) = 0.2
 
         _MirrorX ("Mirror X", Range(0, 1)) = 0
         _MirrorY ("Mirror Y", Range(0, 1)) = 0
@@ -78,14 +82,55 @@ Shader "UI/UI_Video"
 
             sampler2D _MainTex;
 			CBUFFER_START(UnityPerMaterial)
+            float4 _MainTex_TexelSize;
             float4 _MainTex_ST;
-            float _Tolerance;
-            float _Smoothing;
-            float _Desaturation;
+            float _ColorCutoff;
+            float _ColorFeathering;
+            float _MaskFeathering;
+            float _Sharpening;
+		//	float _Despill;
+         //   float _DespillLuminanceAdd;
             float _MirrorX;
             float _MirrorY;
 			float4 _ClipRect;
 			CBUFFER_END
+
+            
+            float rgb2y(float3 c) 
+            {
+                return (0.299*c.r + 0.587*c.g + 0.114*c.b);
+            }
+
+            float rgb2cb(float3 c) 
+            {
+                return (0.5 + -0.168736*c.r - 0.331264*c.g + 0.5*c.b);
+            }
+
+            float rgb2cr(float3 c) 
+            {
+                return (0.5 + 0.5*c.r - 0.418688*c.g - 0.081312*c.b);
+            }
+
+            float colorclose(float Cb_p, float Cr_p, float Cb_key, float Cr_key, float tola, float tolb)
+            {
+                float temp = (Cb_key-Cb_p)*(Cb_key-Cb_p)+(Cr_key-Cr_p)*(Cr_key-Cr_p);
+                float tola2 = tola*tola;
+                float tolb2 = tolb*tolb;
+                if (temp < tola2) return (0);
+                if (temp < tolb2) return (temp-tola2)/(tolb2-tola2);
+                return (1);
+            }
+
+            float maskedTex2D(float4 color, float3 eraserColor, float2 uv)
+            {
+                // Chroma key to CYK conversion
+                float key_cb = rgb2cb(eraserColor.rgb);
+                float key_cr = rgb2cr(eraserColor.rgb);
+                float pix_cb = rgb2cb(color.rgb);
+                float pix_cr = rgb2cr(color.rgb);
+
+                return colorclose(pix_cb, pix_cr, key_cb, key_cr, _ColorCutoff, _ColorFeathering);
+            }
 
             v2f vert (appdata v)
             {
@@ -104,35 +149,55 @@ Shader "UI/UI_Video"
 			#if USE_AVPRO
                 #if defined(UNITY_UV_STARTS_AT_TOP)
                     i.uv.y = 1.0 - i.uv.y;
-                #endif	
+                #endif
+				#if defined(SHADER_API_METAL)
+					i.uv.y = 1.0 - i.uv.y;
+				#endif
 			#endif
                 float2 mirroredUV = float2(lerp(i.uv.x, 1.0 - i.uv.x, _MirrorX), lerp(i.uv.y, 1.0 - i.uv.y, _MirrorY));
                 fixed4 col = tex2D(_MainTex, mirroredUV);
 
- #if defined(SHADER_API_METAL) || defined(USE_AVPRO)
+             #if defined(APPLY_GAMMA)
+                col.rgb = GammaToLinearSpace(col.rgb);
+             #endif
+
+   #if defined(SHADER_API_METAL)// || defined(USE_AVPRO)
                 col.rgb = LinearToGammaSpace(col.rgb);
- #endif
-     
-                #ifdef ERASURE_COLOR
-                    // 计算与绿幕颜色的差值
-                    half3 eraseColor = LinearToGammaSpace(i.color.rgb);
-                    half3 colorDiff = abs(col.rgb - eraseColor);
-                
-                    // 计算颜色匹配度
-                    half match = length(colorDiff);
-                
-                    // 计算透明度
-					half tolerance = _Tolerance;//LinearToGammaSpaceExact(_Tolerance);
-					half smoothing = _Smoothing;//LinearToGammaSpaceExact(_Smoothing);
-                    half alpha = smoothstep(tolerance, tolerance + smoothing, match);
-                
-                    // 应用去饱和度
-                    half luminance = dot(col.rgb, LinearToGammaSpace(half3(0.299, 0.587, 0.114)));
-                    col.rgb = lerp(col.rgb, half3(luminance, luminance, luminance), LinearToGammaSpaceExact(_Desaturation));
-                
-                    // 应用透明度
-                    col.a = alpha*i.color.a;
-                #endif
+ #endif   
+             #ifdef ERASURE_COLOR
+                float2 pixelWidth = float2(1.0 / _MainTex_TexelSize.z, 0);
+                float2 pixelHeight = float2(0, 1.0 / _MainTex_TexelSize.w);
+
+                half3 eraseColor =LinearToGammaSpace(i.color.rgb);
+
+                 float mask = maskedTex2D(col,eraseColor, i.uv);
+
+                 float factor =LinearToGammaSpace(.707);
+                 float factor1 =LinearToGammaSpace(0.12774655);
+
+                float c = mask;
+                float r = maskedTex2D(col,eraseColor, i.uv + pixelWidth);
+                float l = maskedTex2D(col,eraseColor, i.uv - pixelWidth);
+                float d = maskedTex2D(col,eraseColor, i.uv + pixelHeight); 
+                float u = maskedTex2D(col,eraseColor, i.uv - pixelHeight);
+                float rd = maskedTex2D(col,eraseColor, i.uv + pixelWidth + pixelHeight) * factor;
+                float dl = maskedTex2D(col,eraseColor, i.uv - pixelWidth + pixelHeight) * factor;
+                float lu = maskedTex2D(col,eraseColor, i.uv - pixelHeight - pixelWidth) * factor;
+                float ur = maskedTex2D(col,eraseColor, i.uv + pixelWidth - pixelHeight) * factor;
+                float blurContribution = (r + l + d + u + rd + dl + lu + ur + c) * factor1;
+                float alpha = smoothstep(_Sharpening, 1, lerp(c, blurContribution, _MaskFeathering));
+
+                // 应用透明度
+			//	fixed4 mainColor = col;
+                col.a = alpha * i.color.a;
+				
+				// Despill
+              //  float v = (2*col.b+col.r)/4;
+              //  if(col.g > v) col.g = lerp(col.g, v, _Despill);
+              //  float4 dif = (mainColor - col);
+              //  float desaturatedDif = rgb2y(dif.xyz);
+              //  col += lerp(0, desaturatedDif, _DespillLuminanceAdd);
+             #endif
 
 #ifdef UNITY_UI_CLIP_RECT
                 col.a *= UnityGet2DClipping(i.worldPosition.xy, _ClipRect);
@@ -141,7 +206,8 @@ Shader "UI/UI_Video"
 #ifdef UNITY_UI_ALPHACLIP
                 clip(col.a - 0.001);
 #endif				
-                col.rgb = GammaToLinearSpace(col.rgb);
+               col.rgb = GammaToLinearSpace(col.rgb);
+				
                 return col;
             }
             ENDHLSL
