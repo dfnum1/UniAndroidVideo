@@ -83,6 +83,7 @@ namespace GameApp.Media
 		protected int 						m_iPlayerIndex		= -1;
 
         // State
+        private bool m_bVideoLoop = true;
         private bool m_VideoOpened = false;
         private bool m_AutoStartTriggered = false;
         private bool m_WasPlayingOnPause = false;
@@ -360,6 +361,7 @@ namespace GameApp.Media
         //-------------------------------------------------
         public void SetLooping( bool bLooping )
 		{
+            m_bVideoLoop = bLooping;
 			if( m_Video != null )
 			{
 				m_Video.Call("SetLooping", bLooping);
@@ -954,6 +956,7 @@ namespace GameApp.Media
                     {
                   //      Debug.Log("PrepareSurface");
                         //m_Video.Call("AttackSurface");
+                        SetLooping(m_bVideoLoop);
                         if(m_AutoStart) Play();
                     }
                     break;
