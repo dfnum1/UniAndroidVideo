@@ -518,8 +518,10 @@ public class VideoPlayer
         //return ExoCacheSingleton.getCache(context);
         if (m_ExoPlayerUnity.downloadCache == null)
         {
-            String ts = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new java.util.Date());;
-            File downloadContentDirectory = new File(getDownloadDirectory(context), "downloads_" + filePath.hashCode() + "_" + ts);
+            String uniqueId = "player_" + m_ExoPlayerUnity.m_nPlayIndex + "_" + System.identityHashCode(this);
+            File downloadContentDirectory = new File(getDownloadDirectory(context), "cache_" + uniqueId);
+          //  String ts = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new java.util.Date());;
+          //  File downloadContentDirectory = new File(getDownloadDirectory(context), "downloads_" + filePath.hashCode() + "_" + ts);
             m_ExoPlayerUnity.downloadCache = new SimpleCache(downloadContentDirectory, new NoOpCacheEvictor(), new ExoDatabaseProvider(context));
         }
         return m_ExoPlayerUnity.downloadCache;

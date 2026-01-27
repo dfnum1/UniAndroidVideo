@@ -11,7 +11,8 @@ Material:
   m_Shader: {fileID: 4800000, guid: c91d9c061db3de54a8b694f5b41ddf1a, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
+  m_ValidKeywords:
+  - USE_AVPRO
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -62,6 +63,8 @@ Material:
     m_Ints: []
     m_Floats:
     - _BumpScale: 1
+    - _ColorCutoff: 0.05
+    - _ColorFeathering: 0.211
     - _ColorMask: 15
     - _Cutoff: 0.5
     - _Desaturation: 0
@@ -70,12 +73,14 @@ Material:
     - _GlossMapScale: 1
     - _Glossiness: 0.5
     - _GlossyReflections: 1
+    - _MaskFeathering: 1
     - _Metallic: 0
     - _MirrorX: 0
     - _MirrorY: 0
     - _Mode: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.02
+    - _Sharpening: 0.405
     - _Smoothing: 0.1
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1

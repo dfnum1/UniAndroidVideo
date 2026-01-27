@@ -1,3 +1,4 @@
+#if !UNITY_EDITOR && UNITY_ANDROID
 /********************************************************************
 生成日期:	1:11:2020 13:16
 类    名: 	AndroidMediaPlayer
@@ -70,14 +71,14 @@ namespace GameApp.Media
         [AOT.MonoPInvokeCallback(typeof(ENGINE_PLUGIN_RENDER_EVENT))]
         static void OnRenderEvent(int eventId)
         {
-            Debug.Log("OnRenderEvent: " + eventId);
+       //     Debug.Log("OnRenderEvent: " + eventId);
             if (OnRenderEventCallback != null)
                 OnRenderEventCallback(eventId);
         }
         [AOT.MonoPInvokeCallback(typeof(ENGINE_PLUGIN_DEVICE_EVENT))]
         static void OnDeviceEvent(int eventType)
         {
-            Debug.Log("OnDeviceEvent: " + eventType);
+        //    Debug.Log("OnDeviceEvent: " + eventType);
         }
     }
     public enum AVPPluginEvent
@@ -927,7 +928,7 @@ namespace GameApp.Media
             int eventType = (eventId >> 16) & 0xFFFF;
             int playerIndex = (eventId >> 8) & 0xFF;
             int gfxType = eventId & 0xFF;
-            Debug.Log("OnRenderEvent: " + eventType + " PlayerIndex: " + playerIndex + " GfxType: " + gfxType);
+        //    Debug.Log("OnRenderEvent: " + eventType + " PlayerIndex: " + playerIndex + " GfxType: " + gfxType);
 
             return;
             if (playerIndex == m_iPlayerIndex)
@@ -1152,3 +1153,4 @@ namespace GameApp.Media
         }
     }
 }
+#endif

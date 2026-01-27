@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+<<<<<<< HEAD:Assets/OpenScripts/GameApp/Video/VideoController/MediaPlayer/ExoMediaPlayer.cs.meta
+guid: eed9ffef86eac3a47b7b2cc03304d474
+=======
+guid: b60bc9fcd12e94c429ac2fbfcbacfd64
+>>>>>>> patch:Assets/OpenScripts/Third/AVProVideo/Editor/Scripts/Components/ApplyToFarPlaneEditor.cs.meta
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

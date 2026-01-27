@@ -419,6 +419,24 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
         Stop();
         DestroySurface();
         DestroyGl();
+
+        getHandler().post(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                // Release the cache when destroying the player
+                if (downloadCache != null) 
+                {
+                    try {
+                        downloadCache.release();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error releasing cache: " + e.getMessage());
+                    }
+                    downloadCache = null;
+                }
+            }
+        });
     }    
 
     private void DestroyGl()

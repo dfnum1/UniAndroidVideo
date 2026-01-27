@@ -34,7 +34,9 @@ namespace GameApp.Media
     {
         string      GetVideoPath();
 		Texture		GetTexture(int index = 0);
-		void		SetFlipY(bool bFlipY);
+        int         GetTextureFrameCount();
+
+        void		SetFlipY(bool bFlipY);
         bool        IsFlipY();
 
         bool IsEnable();

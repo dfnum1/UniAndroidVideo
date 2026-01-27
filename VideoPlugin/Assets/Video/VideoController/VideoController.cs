@@ -6,7 +6,7 @@
 *********************************************************************/
 #if UNITY_ANDROID && !UNITY_EDITOR
 #else
-//#define USE_AVPRO
+#define USE_AVPRO
 #endif
 
 using UnityEngine;
@@ -45,7 +45,7 @@ namespace GameApp.Media
             m_pVideoRoot = new GameObject("VideoSystem");
             GameObject.DontDestroyOnLoad(m_pVideoRoot);
 #endif
-            m_pVideoRoot.hideFlags |= HideFlags.HideAndDontSave;
+       //     m_pVideoRoot.hideFlags |= HideFlags.HideAndDontSave;
             m_vVideos = new List<IMediaPlayer>(2);
         }
         //------------------------------------------------------

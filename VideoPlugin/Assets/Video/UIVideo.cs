@@ -101,6 +101,16 @@ namespace GameApp.UIComponent
         {
             return m_VideoPlayer;
         }
+#if UNITY_EDITOR
+        //------------------------------------------------------
+        protected override void OnValidate()
+        {
+            base.OnValidate();
+            string shaderDefines = VideoController.GetMaterialDefines();
+            if (!string.IsNullOrEmpty(shaderDefines))
+                material.EnableKeyword(shaderDefines);
+        }
+#endif
         //------------------------------------------------------
         public bool Play(UnityEngine.Video.VideoClip videoClip, bool bLoop = false, System.Action<MediaPlayerEvent.EventType> onCallback = null)
         {
@@ -178,7 +188,13 @@ namespace GameApp.UIComponent
             if (string.IsNullOrEmpty(this.m_strUrl)) return false;
             if (m_VideoPlayer != null)
             {
-                if (m_VideoPlayer.GetVideoPath().CompareTo(this.m_strUrl) == 0) return true;
+                if (m_VideoPlayer.GetVideoPath().CompareTo(this.m_strUrl) == 0)
+                {
+                    string shaderMarc = VideoController.GetMaterialDefines();
+                    if (material && !string.IsNullOrEmpty(shaderMarc))
+                        material.EnableKeyword(shaderMarc);
+                    return true;
+                }
                 VideoController.StopVideo(m_VideoPlayer);
             }
 #if UNITY_EDITOR
@@ -194,8 +210,9 @@ namespace GameApp.UIComponent
                 color.a = 1.0f;
                 defaultShow.color = color;
             }
+            this.SetAllDirty();
             string shaderDefines = VideoController.GetMaterialDefines();
-            if (!string.IsNullOrEmpty(shaderDefines))
+            if (material && !string.IsNullOrEmpty(shaderDefines))
                 material.EnableKeyword(shaderDefines);
             m_VideoPlayer = VideoController.PlayVideo(this.m_strUrl, this.m_bPersistentPath);
             if (m_VideoPlayer != null)
@@ -236,14 +253,14 @@ namespace GameApp.UIComponent
             }
             if (m_VideoPlayer == null) return;
             SyncTexture(m_VideoPlayer);
-        //    if (m_VideoPlayer.IsFinished())
-         //       Hide();
+            //    if (m_VideoPlayer.IsFinished())
+            //       Hide();
         }
         //------------------------------------------------------
         public void SyncTexture(IMediaPlayer player, float alphaFactor = 1)
         {
             this.texture = player.GetTexture();
-            if (this.texture == null)
+            if (this.texture == null || player.GetTextureFrameCount()<=1)
             {
                 erasureColor.a = 0;
                 this.color = erasureColor;
@@ -364,6 +381,10 @@ namespace GameApp.UIComponent
                 EditorUtility.SetDirty(target);
             }
             serializedObject.ApplyModifiedProperties();
+            if (GUILayout.Button("说明文档"))
+            {
+                Application.OpenURL("https://docs.qq.com/doc/DTG56eEVmd0pqcnVN");
+            }
         }
         //-----------------------------------------------------
         [MenuItem("GameObject/UI/Video", false, 0)]
