@@ -318,8 +318,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
             if(this.unityMessage!=null)
                 this.unityMessage.OnVideoRenderBegin(this.m_nPlayIndex);
 
-            Matrix.setIdentityM(mSurfaceTextureMat, 0);
-
+            //    Matrix.setIdentityM(mSurfaceTextureMat, 0);
             mFBO.FBOBegin();
             GLES20.glViewport(0, 0, GetWidth(), GetHeight());
             mTexture2DExt.draw(mSurfaceTextureMat,false);

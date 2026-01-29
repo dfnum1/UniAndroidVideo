@@ -3,9 +3,6 @@ package com.unity3d;
 import android.opengl.GLES20;
 import android.util.Log;
 
-/**
- * Created by eleven on 16/9/7.
- */
 public class Utils {
     public static final String TAG = Utils.class.getSimpleName();
     public static void checkGlError(String op) {

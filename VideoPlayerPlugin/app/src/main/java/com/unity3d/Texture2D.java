@@ -14,9 +14,6 @@ import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.ShortBuffer;
 
-/**
- * Created by eleven on 16/9/7.
- */
 public class Texture2D {
 
     protected int mTextureID;
@@ -42,10 +39,10 @@ public class Texture2D {
     protected final int vertexStride = COORDS_PER_VERTEX * 4; // 4 bytes per vertex
 
     float[] uvs = new float[] {
-            0.0f, 0.0f, // top left (V2)
-            0.0f, 1.0f, // bottom left (V1)
-            1.0f, 1.0f, // top right (V4)
-            1.0f, 0.0f // bottom right (V3)
+            0.0f, 1.0f, // 左上 (对应顶点0: -1, 1)
+            0.0f, 0.0f, // 左下 (对应顶点1: -1, -1)
+            1.0f, 0.0f, // 右下 (对应顶点2: 1, -1)
+            1.0f, 1.0f  // 右上 (对应顶点3: 1, 1)
     };
 
     protected FloatBuffer uvBuffer;
@@ -54,6 +51,8 @@ public class Texture2D {
 
     protected int mWidth;
     protected int mHeight;
+
+    protected int[] mlastVAO = new int[1];
 
     public Texture2D(int textureID) {
         mTextureID = textureID;
@@ -203,9 +202,8 @@ public class Texture2D {
         int lastBindeVAO = 0;
         if(!m_CanUseGLBindVertexArray)
         {
-                int[] lastVAO = new int[1];
-                GLES30.glGetIntegerv(GLES30.GL_VERTEX_ARRAY_BINDING, lastVAO, 0);
-                lastBindeVAO = lastVAO[0];
+                GLES30.glGetIntegerv(GLES30.GL_VERTEX_ARRAY_BINDING, mlastVAO, 0);
+                lastBindeVAO = mlastVAO[0];
                 GLES30.glBindVertexArray(0);
         }
 
