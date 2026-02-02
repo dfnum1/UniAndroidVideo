@@ -296,13 +296,15 @@ public class VideoPlayer
         if (format != null)
         {
             stereoMode = format.stereoMode;
+            int oldWidth = width;
+            int oldHeight = height;
             width = format.width;
             height = format.height;
-           // if(mySurface == null)
-            //{
-              //  mySurface = m_ExoPlayerUnity.CreateExoSurface(width, height); 
-             //   exoPlayer.setVideoSurface(mySurface);
-           //}
+            
+            // 如果视频尺寸发生变化，并且使用的是ImageReader模式，重新创建表面
+            if ((width != oldWidth || height != oldHeight) && width > 0 && height > 0) {
+                m_ExoPlayerUnity.onVideoSizeChanged(width, height);
+            }
         }
         else
         {

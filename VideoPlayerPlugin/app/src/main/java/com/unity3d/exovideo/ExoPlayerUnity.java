@@ -1,8 +1,9 @@
 package com.unity3d.exovideo;
+
 import android.os.Build;
 import android.opengl.GLES20;
 import android.opengl.GLES30;
-import android.opengl.GLES11Ext; 
+import android.opengl.GLES11Ext;
 import android.opengl.Matrix;
 import android.content.Context;
 import android.os.Handler;
@@ -10,11 +11,19 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.Surface;
 import android.graphics.SurfaceTexture;
+import android.media.Image;
+import android.media.ImageReader;
+import android.graphics.ImageFormat;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Rect;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import com.unity3d.video.MoblieVideo_GlRender;
 import com.unity3d.Texture2DExt;
+import com.unity3d.Texture2DExtYUV;
 import com.unity3d.Texture2D;
 import com.unity3d.FBO;
 
@@ -22,27 +31,31 @@ import com.google.android.exoplayer2.upstream.cache.Cache;
 
 import java.io.File;
 
-public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
-{
+public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     private static HashMap<Integer, ExoPlayerUnity> s_AllPlayers = null;
-    //Unity Class Defaults
+    // Unity Class Defaults
     private static final String TAG = "ExoPlayerUnity";
 
-    private Context myContext ;
+    private Context myContext;
     public Handler handler;
     public File downloadDirectory;
     public Cache downloadCache;
     public IUnityMessage unityMessage;
 
     private Texture2DExt mTexture2DExt;
+    private Texture2DExtYUV mTexture2DExtRGBA;
     private Texture2D mUnityTexture;
+    private Texture2D mUnityTextureRGBA;
     private FBO mFBO;
     SurfaceTexture surfaceTexture;
     Surface mySurface;
 
+    boolean m_UseImageReader = false;
+    ImageReader mVideImageReader;
+
     float[] mSurfaceTextureMat = new float[16];
 
-    int m_TextureHandle =0;
+    int m_TextureHandle = 0;
 
     VideoPlayer videoPlayer;
     int m_nPlayIndex;
@@ -54,62 +67,57 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
     int m_iOpenGLVersion = 1;
     boolean m_bCanUseGLBindVertexArray = false;
 
-    public static void OnRendererEvent(int eventID)
-    {
-      //  Log.d(TAG, "OnRendererEventJava: " + eventID);
+    public static void OnRendererEvent(int eventID) {
+        // Log.d(TAG, "OnRendererEventJava: " + eventID);
         int eventType = (eventID >> 16) & 0xFFFF;
         int playerIndex = (eventID >> 8) & 0xFF;
         int gfxType = eventID & 0xFF;
-        if(eventType == 2)   
+        if (eventType == 2)
             RendererSetupPlayer(playerIndex, gfxType);
-        else if(eventType == 3)
+        else if (eventType == 3)
             RenderPlayer(playerIndex);
-        else if(eventType == 4)
-            RenderResume(playerIndex);    
-        else if(eventType == 5)
-            RenderDestroy(playerIndex);                        
+        else if (eventType == 4)
+            RenderResume(playerIndex);
+        else if (eventType == 5)
+            RenderDestroy(playerIndex);
     }
 
-    private static ExoPlayerUnity GetClassForPlayerIndex(int playerIndex) 
-    {
+    // 创建简单的着色器程序 - 已移除，使用Texture2DExtRGBA类
+
+    private static ExoPlayerUnity GetClassForPlayerIndex(int playerIndex) {
         ExoPlayerUnity returnPlayerClass = null;
-        if (s_AllPlayers != null) 
-        {
+        if (s_AllPlayers != null) {
             if (s_AllPlayers.containsKey(Integer.valueOf(playerIndex)))
                 returnPlayerClass = (ExoPlayerUnity) s_AllPlayers.get(Integer.valueOf(playerIndex));
         }
         return returnPlayerClass;
     }
-    public static void RenderPlayer(int playerIndex) 
-    {
-     //   Log.d(TAG, "RenderPlayer" + playerIndex);
+
+    public static void RenderPlayer(int playerIndex) {
+        // Log.d(TAG, "RenderPlayer" + playerIndex);
         ExoPlayerUnity theClass;
         if ((theClass = GetClassForPlayerIndex(playerIndex)) != null) {
-           theClass.Render();
+            theClass.Render();
         }
     }
-    
-    public static void RendererSetupPlayer(int playerIndex, int iDeviceIndex)
-    {
+
+    public static void RendererSetupPlayer(int playerIndex, int iDeviceIndex) {
         Log.d(TAG, "RendererSetupPlayer" + playerIndex + " DeviceIndex:" + iDeviceIndex);
-               
+
         ExoPlayerUnity theClass;
-        if ((theClass = GetClassForPlayerIndex(playerIndex)) != null) 
-        {
+        if ((theClass = GetClassForPlayerIndex(playerIndex)) != null) {
             boolean bOverride = false;
-            if(iDeviceIndex == 8)
+            if (iDeviceIndex == 8) {
+                theClass.m_iOpenGLVersion = 2; // opengles2.0
+                bOverride = true;
+            } else if (iDeviceIndex == 11)// opengles3.0
             {
-                theClass.m_iOpenGLVersion = 2;  //opengles2.0
+                theClass.m_iOpenGLVersion = 3;
                 bOverride = true;
             }
-            else if(iDeviceIndex == 11)//opengles3.0
-            {
-                theClass.m_iOpenGLVersion =3;
-                bOverride = true;
-            }
-            if(bOverride)
-            {
-                theClass.m_bCanUseGLBindVertexArray = false;//((theClass.m_iOpenGLVersion > 2) && (Build.VERSION.SDK_INT >= 18));
+            if (bOverride) {
+                theClass.m_bCanUseGLBindVertexArray = false;// ((theClass.m_iOpenGLVersion > 2) &&
+                                                            // (Build.VERSION.SDK_INT >= 18));
             }
 
             {
@@ -118,181 +126,214 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
         }
     }
 
-    public static void RenderResume(int playerIndex) 
-    {
+    public static void RenderResume(int playerIndex) {
         Log.d(TAG, "RenderResume" + playerIndex);
         ExoPlayerUnity theClass;
         if ((theClass = GetClassForPlayerIndex(playerIndex)) != null) {
-           theClass.Resume();
+            theClass.Resume();
         }
     }
 
-    public static void RenderDestroy(int playerIndex) 
-    {
+    public static void RenderDestroy(int playerIndex) {
         Log.d(TAG, "RenderDestroy" + playerIndex);
         ExoPlayerUnity theClass;
         if ((theClass = GetClassForPlayerIndex(playerIndex)) != null) {
-           theClass.Destroy();
+            theClass.Destroy();
         }
     }
 
-    public void SetUnityCallback(IUnityMessage _unityMessage)
-    {
+    public void SetUnityCallback(IUnityMessage _unityMessage) {
         this.unityMessage = _unityMessage;
     }
 
-    public void Initialise(Context context, int index)
-    {
-        m_iNumberFramesAvailable =0;
+    public void Initialise(Context context, int index) {
+        m_iNumberFramesAvailable = 0;
         m_nFrameCount = 0;
-        if (videoPlayer == null)
-        {
+        if (videoPlayer == null) {
             m_nPlayIndex = index;
             myContext = context;
             unityMessage = null;
             Log.d(TAG, "Added video player");
-            if (s_AllPlayers == null) s_AllPlayers = new HashMap<Integer, ExoPlayerUnity>();
+            if (s_AllPlayers == null)
+                s_AllPlayers = new HashMap<Integer, ExoPlayerUnity>();
             s_AllPlayers.put(Integer.valueOf(m_nPlayIndex), this);
         }
-    }    
+    }
 
-    public int GetPlayIndex()
-    {
+    public int GetPlayIndex() {
         return m_nPlayIndex;
     }
 
-    public boolean OpenVideoFromFile(String filePath, long offset, String httpJson) 
-    {
-        if(myContext == null) return false;
-        if(videoPlayer !=null) return false;
+    public boolean OpenVideoFromFile(String filePath, long offset, String httpJson) {
+        if (myContext == null)
+            return false;
+        if (videoPlayer != null)
+            return false;
         m_nFrameCount = 0;
-        m_iNumberFramesAvailable =0;
-        videoPlayer = new VideoPlayer(this,myContext, filePath);
+        m_iNumberFramesAvailable = 0;
+        videoPlayer = new VideoPlayer(this, myContext, filePath);
         return true;
     }
 
-    public static String GetPluginVersion()
-    {
+    public static String GetPluginVersion() {
         return "1.0.0";
     }
 
-    public int GetTextureHandle()
-    {
-        if(mUnityTexture!=null)
+    public int GetTextureHandle() {
+        if (mUnityTexture != null)
             return mUnityTexture.getTextureID();
         return m_TextureHandle;
     }
 
-    private Handler getHandler()
-    {
-        if (handler == null)
-        {
+    private Handler getHandler() {
+        if (handler == null) {
             handler = new Handler(Looper.getMainLooper());
         }
 
         return handler;
     }
 
-    public void Log(String message)
-    {
+    public void Log(String message) {
         Log.d(TAG, message);
     }
 
-    public void Prepare()
-    {
+    public void Prepare() {
         m_nFrameCount = 0;
-        m_iNumberFramesAvailable =0;
-        if (videoPlayer == null) return;
+        m_iNumberFramesAvailable = 0;
+        if (videoPlayer == null)
+            return;
 
-        if(surfaceTexture == null)
-         {
+        // 对于SurfaceTexture模式，先创建表面
+        // 对于ImageReader模式，等到视频尺寸确定后再创建
+        if (!m_UseImageReader && surfaceTexture == null) {
             CreateExoSurface(GetWidth(), GetHeight());
-         }   
+        }
+
         // set up exoplayer on main thread
-        getHandler().post(new Runnable()
-        {
+        getHandler().post(new Runnable() {
             @Override
-            public void run()
-            {
-                if(mySurface!=null) mySurface.release();
-                mySurface = new Surface(surfaceTexture);
+            public void run() {
+                if (mySurface != null)
+                    mySurface.release();
+
+                if (!m_UseImageReader && surfaceTexture != null) {
+                    mySurface = new Surface(surfaceTexture);
+                } else {
+                    // ImageReader模式暂时不创建Surface，等到视频尺寸确定后再创建
+                    mySurface = null;
+                }
+
                 videoPlayer.Prepare(mySurface);
             }
         });
     }
 
-    public void AttackSurface()
-    {
-        if (videoPlayer == null) return;
+    public void AttackSurface() {
+        if (videoPlayer == null)
+            return;
         // set up exoplayer on main thread
-        getHandler().post(new Runnable()
-        {
+        getHandler().post(new Runnable() {
             @Override
-            public void run()
-            {
+            public void run() {
                 videoPlayer.AttackSurface(mySurface);
             }
         });
     }
 
-    public void Resume()
-    {
-        if(videoPlayer == null)
+    public void Resume() {
+        if (videoPlayer == null)
             return;
         CreateExoSurface(GetWidth(), GetHeight());
-        if(GetWidth() >0 && GetHeight() >0)
-        {
+        if (GetWidth() > 0 && GetHeight() > 0) {
             mUnityTexture = new Texture2D(myContext, GetWidth(), GetHeight(), m_bCanUseGLBindVertexArray);
             mFBO = new FBO(mUnityTexture);
         }
 
-        getHandler().post(new Runnable()
-        {
+        getHandler().post(new Runnable() {
             @Override
-            public void run()
-            {
-                if(mySurface!=null) mySurface.release();
-                mySurface = new Surface(surfaceTexture);
-                videoPlayer.AttackSurface(mySurface);
+            public void run() {
+                // 对于ImageReader模式，mySurface已经在CreateExoSurface中设置
+                // 对于SurfaceTexture模式，重新创建Surface
+                if (!m_UseImageReader && surfaceTexture != null) {
+                    if (mySurface != null)
+                        mySurface.release();
+                    mySurface = new Surface(surfaceTexture);
+                }
+                // 绑定表面到播放器
+                if (mySurface != null) {
+                    videoPlayer.AttackSurface(mySurface);
+                }
             }
         });
         Log.d(TAG, "Resume " + GetWidth() + "x" + GetHeight() + "   textid:" + m_TextureHandle);
     }
 
-    public void Render()
-    {
-        synchronized(this)
-        {
-            if(GetWidth() <=0 || GetHeight() <=0)
-            return;
-
-            if(surfaceTexture == null)
+    public void Render() {
+        synchronized (this) {
+            Log.d(TAG, "Render " + GetWidth() + "x" + GetHeight() + "   textid:" + m_TextureHandle);
+            if (GetWidth() <= 0 || GetHeight() <= 0)
                 return;
-            
-            UpdateSurfaceTexture();
+            if (m_UseImageReader) {
+                if (mVideImageReader == null)
+                    return;
+                UpdateImageReaderFrame();
+            } else {
+                if (surfaceTexture == null)
+                    return;
+                UpdateSurfaceTexture();
+            }
         }
     }
 
-    public void UpdateSurfaceTexture()
-    {
-        if (videoPlayer == null) return;
+    public void UpdateSurfaceTexture() {
+        if (videoPlayer == null)
+            return;
 
-        if(m_iNumberFramesAvailable>0 && mNewFrameAvailable)
-        {
+        if (m_iNumberFramesAvailable > 0 && mNewFrameAvailable) {
             int iNumFramesAvailable = this.m_iNumberFramesAvailable;
             mNewFrameAvailable = false;
-            m_iNumberFramesAvailable =0;
-            if (surfaceTexture != null)
-            {
+            m_iNumberFramesAvailable = 0;
+            if (surfaceTexture != null) {
                 surfaceTexture.updateTexImage();
 
                 surfaceTexture.getTransformMatrix(mSurfaceTextureMat);
 
-                RenderScene(mSurfaceTextureMat, this.m_TextureHandle,m_iNumberFramesAvailable);
+                RenderScene(mSurfaceTextureMat, this.m_TextureHandle, m_iNumberFramesAvailable);
                 m_nFrameCount++;
-                if(m_nFrameCount >= 1000000) m_nFrameCount =1;
+                if (m_nFrameCount >= 1000000)
+                    m_nFrameCount = 1;
 
-               // Log.d(TAG, "RenderScene " + m_nPlayIndex + "   textid:" + m_TextureHandle);
+                // Log.d(TAG, "RenderScene " + m_nPlayIndex + " textid:" + m_TextureHandle);
+            }
+        }
+    }
+
+    public void UpdateImageReaderFrame() {
+        if (videoPlayer == null) {
+            return;
+        }
+
+        if (m_iNumberFramesAvailable > 0 && mNewFrameAvailable) {
+            int iNumFramesAvailable = this.m_iNumberFramesAvailable;
+            mNewFrameAvailable = false;
+            m_iNumberFramesAvailable = 0;
+            if (mVideImageReader != null) {
+                Image image = mVideImageReader.acquireLatestImage();
+
+                if (image != null) {
+                    try {
+                        // 处理Image数据并渲染
+                        RenderImageReaderFrame(image);
+                        // RenderImageXXX(image);
+                        m_nFrameCount++;
+                        if (m_nFrameCount >= 1000000)
+                            m_nFrameCount = 1;
+                    } finally {
+                        image.close();
+                    }
+                } else {
+                    Log.d(TAG, "UpdateImageReaderFrame: No new image available");
+                }
             }
         }
     }
@@ -305,96 +346,221 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
         }
     }
 
-    void RenderScene(float[] stMatrix, int textureId, int numFrame)
-    {
-        try
-        {
-            if(mUnityTexture == null)
-            {
+    void RenderScene(float[] stMatrix, int textureId, int numFrame) {
+        try {
+            if (mUnityTexture == null) {
                 mUnityTexture = new Texture2D(myContext, GetWidth(), GetHeight(), m_bCanUseGLBindVertexArray);
                 mFBO = new FBO(mUnityTexture);
             }
 
-            if(this.unityMessage!=null)
+            if (this.unityMessage != null)
                 this.unityMessage.OnVideoRenderBegin(this.m_nPlayIndex);
 
-            //    Matrix.setIdentityM(mSurfaceTextureMat, 0);
+            // Matrix.setIdentityM(mSurfaceTextureMat, 0);
             mFBO.FBOBegin();
             GLES20.glViewport(0, 0, GetWidth(), GetHeight());
-            mTexture2DExt.draw(mSurfaceTextureMat,false);
+            mTexture2DExt.draw(mSurfaceTextureMat, false);
             mFBO.FBOEnd();
-            if(this.unityMessage!=null)
+            if (this.unityMessage != null)
                 this.unityMessage.OnVideoRenderEnd(this.m_nPlayIndex);
-        }
-        catch (Exception e)
-        {
+        } catch (Exception e) {
             Log.e(TAG, "RenderScene Exception: " + e.getMessage());
         }
 
     }
 
-    public void CreateExoSurface(int width, int height)
-    {
-        if (videoPlayer == null) return;
+    void RenderImageXXX(Image image) {
+        if (mUnityTexture == null) {
+            mUnityTexture = new Texture2D(myContext, GetWidth(), GetHeight(), m_bCanUseGLBindVertexArray);
+            mFBO = new FBO(mUnityTexture);
+        }
+
+        if (mTexture2DExtRGBA == null) {
+            mTexture2DExtRGBA = new Texture2DExtYUV(myContext, GetWidth(), GetHeight(),
+                    m_bCanUseGLBindVertexArray);
+        }
+
+        if (this.unityMessage != null)
+            this.unityMessage.OnVideoRenderBegin(this.m_nPlayIndex);
+
+        Matrix.setIdentityM(mSurfaceTextureMat, 0);
+        mFBO.FBOBegin();
+        GLES20.glViewport(0, 0, GetWidth(), GetHeight());
+        mTexture2DExtRGBA.draw(mSurfaceTextureMat, false);
+        mFBO.FBOEnd();
+        if (this.unityMessage != null)
+            this.unityMessage.OnVideoRenderEnd(this.m_nPlayIndex);
+    }
+
+    void RenderImageReaderFrame(Image image) {
+        try {
+            // 获取Image的像素数据
+            Image.Plane[] planes = image.getPlanes();
+            if (planes.length >= 3) {
+                int width = image.getWidth();
+                int height = image.getHeight();
+
+                if (mUnityTexture == null) {
+                    mUnityTexture = new Texture2D(myContext, GetWidth(), GetHeight(), m_bCanUseGLBindVertexArray);
+                    mFBO = new FBO(mUnityTexture);
+                }
+
+                // 确保mTexture2DExtRGBA不为null且尺寸正确
+                if (mTexture2DExtRGBA == null || mTexture2DExtRGBA.getWidth() != width
+                        || mTexture2DExtRGBA.getHeight() != height) {
+                    mTexture2DExtRGBA = new Texture2DExtYUV(myContext, width, height, m_bCanUseGLBindVertexArray);
+                }
+
+                // 确保mTexture2DExtRGBA和mFBO不为null
+                if (mTexture2DExtRGBA != null && mFBO != null) {
+                    if (this.unityMessage != null)
+                        this.unityMessage.OnVideoRenderBegin(this.m_nPlayIndex);
+
+                    // 获取YUV数据
+                    ByteBuffer yBuffer = planes[0].getBuffer();
+                    ByteBuffer uBuffer = planes[1].getBuffer();
+                    ByteBuffer vBuffer = planes[2].getBuffer();
+
+                    int yRowStride = planes[0].getRowStride();
+                    int uvRowStride = planes[1].getRowStride();
+                    int uvPixelStride = planes[1].getPixelStride();
+
+                    // 直接创建像素数组，避免使用Bitmap
+                    int[] pixels = new int[width * height];
+
+                    // YUV转RGBA
+                    for (int i = 0; i < height; i++) {
+                        for (int j = 0; j < width; j++) {
+                            int y = yBuffer.get(i * yRowStride + j) & 0xFF;
+                            int u = uBuffer.get((i / 2) * uvRowStride + (j / 2) * uvPixelStride) & 0xFF;
+                            int v = vBuffer.get((i / 2) * uvRowStride + (j / 2) * uvPixelStride) & 0xFF;
+
+                            // YUV转RGB
+                            int r = (int) (y + 1.402f * (v - 128));
+                            int g = (int) (y - 0.344f * (u - 128) - 0.714f * (v - 128));
+                            int b = (int) (y + 1.772f * (u - 128));
+
+                            // clamp to [0, 255]
+                            r = Math.max(0, Math.min(255, r));
+                            g = Math.max(0, Math.min(255, g));
+                            b = Math.max(0, Math.min(255, b));
+
+                            pixels[i * width + j] = (0xFF << 24) | (r << 16) | (g << 8) | b;
+                        }
+                    }
+
+                    // 将像素数组转换为字节数组
+                    byte[] data = new byte[width * height * 4];
+                    for (int i = 0; i < pixels.length; i++) {
+                        int pixel = pixels[i];
+                        data[i * 4] = (byte) ((pixel >> 16) & 0xFF); // R
+                        data[i * 4 + 1] = (byte) ((pixel >> 8) & 0xFF); // G
+                        data[i * 4 + 2] = (byte) (pixel & 0xFF); // B
+                        data[i * 4 + 3] = (byte) ((pixel >> 24) & 0xFF); // A
+                    }
+
+                    // 使用Texture2DExtRGBA的updateTexture方法更新纹理数据
+                    mTexture2DExtRGBA.updateTexture(width, height, data);
+
+                    // 绘制纹理到FBO
+                    mFBO.FBOBegin();
+                    GLES20.glViewport(0, 0, width, height);
+                    GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                    GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+
+                    // 使用Texture2DExtRGBA绘制
+                    Matrix.setIdentityM(mSurfaceTextureMat, 0);
+                    mTexture2DExtRGBA.draw(mSurfaceTextureMat, false);
+
+                    mFBO.FBOEnd();
+
+                    if (this.unityMessage != null)
+                        this.unityMessage.OnVideoRenderEnd(this.m_nPlayIndex);
+                } else {
+                    Log.e(TAG, "mTexture2DExtRGBA or mFBO is null");
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "RenderImageReaderFrame Exception: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public void CreateExoSurface(int width, int height) {
+        if (videoPlayer == null)
+            return;
 
         DestroySurface();
         DestroyGl();
-         mTexture2DExt = new Texture2DExt(myContext, 0,0,m_bCanUseGLBindVertexArray);
-          surfaceTexture = new SurfaceTexture(mTexture2DExt.getTextureID());
-          m_TextureHandle = mTexture2DExt.getTextureID();
-        surfaceTexture.setDefaultBufferSize(width, height);
-        surfaceTexture.setOnFrameAvailableListener(this);
-        Log.d(TAG, "CreateExoSurface " + width + "x" + height + "   textid:" + m_TextureHandle);
+
+        if (m_UseImageReader) {
+            // 使用ImageReader模式
+            mVideImageReader = ImageReader.newInstance(width, height, ImageFormat.YUV_420_888, 2);
+            mVideImageReader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
+                @Override
+                public void onImageAvailable(ImageReader reader) {
+                    synchronized (ExoPlayerUnity.this) {
+                        mNewFrameAvailable = true;
+                        m_iNumberFramesAvailable += 1;
+                    }
+                }
+            }, getHandler());
+            // 设置mySurface变量，以便AttackSurface方法使用
+            mySurface = mVideImageReader.getSurface();
+            Log.d(TAG, "CreateExoSurface with ImageReader " + width + "x" + height);
+        } else {
+            // 使用SurfaceTexture模式
+            mTexture2DExt = new Texture2DExt(myContext, 0, 0, m_bCanUseGLBindVertexArray);
+            surfaceTexture = new SurfaceTexture(mTexture2DExt.getTextureID());
+            m_TextureHandle = mTexture2DExt.getTextureID();
+            surfaceTexture.setDefaultBufferSize(width, height);
+            surfaceTexture.setOnFrameAvailableListener(this);
+            Log.d(TAG, "CreateExoSurface with SurfaceTexture " + width + "x" + height + "   textid:" + m_TextureHandle);
+        }
     }
 
     @Override
     public void onFrameAvailable(SurfaceTexture st) {
         synchronized (this) {
-            if(st == this.surfaceTexture)
-            {
-             //   Log.d(TAG, "onFrameAvailable " + m_nPlayIndex);
+            if (st == this.surfaceTexture) {
+                // Log.d(TAG, "onFrameAvailable " + m_nPlayIndex);
                 mNewFrameAvailable = true;
-                m_iNumberFramesAvailable+=1;
-            }
-            else
-            {
+                m_iNumberFramesAvailable += 1;
+            } else {
                 Log.d(TAG, "onFrameAvailable !=");
             }
             return;
         }
-       
+
     }
 
+    public void Play() {
+        if (videoPlayer == null)
+            return;
 
-    public void Play()
-    {
-        if (videoPlayer == null) return;
-
-        getHandler().post(new Runnable()
-        {
+        getHandler().post(new Runnable() {
             @Override
-            public void run()
-            {
+            public void run() {
                 videoPlayer.Play();
             }
         });
     }
-    public void Pause()
-    {
-        if (videoPlayer == null) return;
 
-        getHandler().post(new Runnable()
-        {
+    public void Pause() {
+        if (videoPlayer == null)
+            return;
+
+        getHandler().post(new Runnable() {
             @Override
-            public void run()
-            {
+            public void run() {
                 videoPlayer.Pause();
             }
         });
     }
-    public void Stop()
-    {
-        if (videoPlayer == null) return;
+
+    public void Stop() {
+        if (videoPlayer == null)
+            return;
 
         s_AllPlayers.remove(Integer.valueOf(this.m_nPlayIndex));
         if ((s_AllPlayers != null) && (s_AllPlayers.isEmpty())) {
@@ -402,31 +568,25 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
             s_AllPlayers = null;
         }
 
-        getHandler().post(new Runnable()
-        {
+        getHandler().post(new Runnable() {
             @Override
-            public void run()
-            {
+            public void run() {
                 videoPlayer.Stop();
                 videoPlayer = null;
             }
         });
     }
 
-    public void Destroy()
-    {
+    public void Destroy() {
         Stop();
         DestroySurface();
         DestroyGl();
 
-        getHandler().post(new Runnable()
-        {
+        getHandler().post(new Runnable() {
             @Override
-            public void run()
-            {
+            public void run() {
                 // Release the cache when destroying the player
-                if (downloadCache != null) 
-                {
+                if (downloadCache != null) {
                     try {
                         downloadCache.release();
                     } catch (Exception e) {
@@ -436,196 +596,219 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener
                 }
             }
         });
-    }    
+    }
 
-    private void DestroyGl()
-    {
-        if(mFBO!=null)mFBO.destory();
+    private void DestroyGl() {
+        if (mFBO != null)
+            mFBO.destory();
         mFBO = null;
-        if(mUnityTexture!=null)mUnityTexture.destory();
+        if (mUnityTexture != null)
+            mUnityTexture.destory();
         mUnityTexture = null;
-        if(mTexture2DExt!=null) mTexture2DExt.destory();
+        if (mTexture2DExt != null)
+            mTexture2DExt.destory();
         mTexture2DExt = null;
         m_TextureHandle = 0;
     }
 
-    private void DestroySurface()
-    {
-        if(surfaceTexture!=null)
-        {
-            surfaceTexture.setOnFrameAvailableListener(null);
-            surfaceTexture.release();
+    private void DestroySurface() {
+        if (m_UseImageReader) {
+            if (mVideImageReader != null) {
+                mVideImageReader.close();
+                mVideImageReader = null;
+            }
+        } else {
+            if (surfaceTexture != null) {
+                surfaceTexture.setOnFrameAvailableListener(null);
+                surfaceTexture.release();
+            }
+            surfaceTexture = null;
         }
-        surfaceTexture = null;
 
-        if(mySurface!=null)mySurface.release();
+        if (mySurface != null)
+            mySurface.release();
         mySurface = null;
 
-        m_iNumberFramesAvailable =0;
+        m_iNumberFramesAvailable = 0;
         mNewFrameAvailable = false;
-    }    
-
+    }
 
     ///// SETTERS //////
-    public void SetLooping(final boolean looping)
-    {
-        if (videoPlayer == null) return;
+    public void SetLooping(final boolean looping) {
+        if (videoPlayer == null)
+            return;
 
-        getHandler().post(new Runnable()
-        {
+        getHandler().post(new Runnable() {
             @Override
-            public void run()
-            {
+            public void run() {
                 videoPlayer.SetLooping(looping);
             }
         });
     }
 
-    public boolean IsLooping()
-    {
-        if (videoPlayer == null)
-        {
+    public boolean IsLooping() {
+        if (videoPlayer == null) {
             return false;
         }
         return videoPlayer.IsLooping();
     }
 
-    public boolean CanPlay()
-    {
-        return videoPlayer !=null;
+    public boolean CanPlay() {
+        return videoPlayer != null;
     }
 
+    public void SetPlaybackPosition(final double percent) {
+        if (videoPlayer == null)
+            return;
 
-    public void SetPlaybackPosition(final double percent)
-    {
-        if (videoPlayer == null) return;
-
-        getHandler().post(new Runnable()
-        {
+        getHandler().post(new Runnable() {
             @Override
-            public void run()
-            {
+            public void run() {
                 videoPlayer.SetPlaybackPosition(percent);
             }
         });
     }
-    public void SetPlaybackSpeed(final float speed)
-    {
-        if (videoPlayer == null) return;
 
-        getHandler().post(new Runnable()
-        {
+    public void SetPlaybackSpeed(final float speed) {
+        if (videoPlayer == null)
+            return;
+
+        getHandler().post(new Runnable() {
             @Override
-            public void run()
-            {
+            public void run() {
                 videoPlayer.SetPlaybackSpeed(speed);
             }
         });
     }
 
-
-    public int GetWidth()
-    {
-        if (videoPlayer == null)
-        {
+    public int GetWidth() {
+        if (videoPlayer == null) {
             return -1;
         }
 
         return videoPlayer.GetWidth();
     }
-    public int GetHeight()
-    {
-        if (videoPlayer == null)
-        {
+
+    public int GetHeight() {
+        if (videoPlayer == null) {
             return -1;
         }
 
         return videoPlayer.GetHeight();
     }
-    public boolean GetIsPlaying()
-    {
-        if (videoPlayer == null)
-        {
+
+    public boolean GetIsPlaying() {
+        if (videoPlayer == null) {
             return false;
         }
 
         return videoPlayer.GetIsPlaying();
     }
 
-    public boolean IsPaused()
-    {
-        if (videoPlayer == null)
-        {
+    public boolean IsPaused() {
+        if (videoPlayer == null) {
             return false;
         }
 
         return videoPlayer.IsPaused();
     }
 
-    public boolean IsFinished()
-    {
-        if (videoPlayer == null)
-        {
+    public boolean IsFinished() {
+        if (videoPlayer == null) {
             return false;
         }
 
         return videoPlayer.IsFinished();
     }
 
-    public boolean IsBuffering()
-    {
-        if (videoPlayer == null)
-        {
+    public boolean IsBuffering() {
+        if (videoPlayer == null) {
             return false;
         }
 
         return videoPlayer.IsBuffering();
     }
 
-    public int GetCurrentPlaybackState()
-    {
-        if (videoPlayer == null)
-        {
+    public int GetCurrentPlaybackState() {
+        if (videoPlayer == null) {
             return 0;
         }
 
         return videoPlayer.GetCurrentPlaybackState();
     }
-    public long GetLength()
-    {
-        if (videoPlayer == null)
-        {
+
+    public long GetLength() {
+        if (videoPlayer == null) {
             return 0;
         }
 
         return videoPlayer.GetLength();
     }
-    public double GetPlaybackPosition()
-    {
-        if (videoPlayer == null)
-        {
+
+    public double GetPlaybackPosition() {
+        if (videoPlayer == null) {
             return 0;
         }
 
         return videoPlayer.GetPlaybackPosition();
     }
 
-    public int GetFrameCount()
-    {
-        if(videoPlayer == null || !GetIsPlaying()) return 0;
+    public int GetFrameCount() {
+        if (videoPlayer == null || !GetIsPlaying())
+            return 0;
         return m_nFrameCount;
     }
 
-    public void SetVolume(float volume)
-    {
-        if(videoPlayer == null) return;
-        
-        getHandler().post(new Runnable()
-        {
+    public void SetVolume(float volume) {
+        if (videoPlayer == null)
+            return;
+
+        getHandler().post(new Runnable() {
             @Override
-            public void run()
-            {
+            public void run() {
                 videoPlayer.SetVolume(volume);
+            }
+        });
+    }
+
+    public void SetUseImageReader(boolean useImageReader) {
+        if (m_UseImageReader != useImageReader) {
+            m_UseImageReader = useImageReader;
+            // 如果播放器已经初始化，重新创建表面以应用更改
+            if (videoPlayer != null && GetWidth() > 0 && GetHeight() > 0) {
+                CreateExoSurface(GetWidth(), GetHeight());
+                // 重新绑定表面到播放器
+                AttackSurface();
+            }
+            Log.d(TAG, "SetUseImageReader: " + useImageReader);
+        }
+    }
+
+    public boolean GetUseImageReader() {
+        return m_UseImageReader;
+    }
+
+    // 视频尺寸变化时的回调
+    public void onVideoSizeChanged(final int width, final int height) {
+        Log.d(TAG, "onVideoSizeChanged: " + width + "x" + height);
+
+        getHandler().post(new Runnable() {
+            @Override
+            public void run() {
+                // 对于ImageReader模式，重新创建表面
+                if (m_UseImageReader) {
+                    CreateExoSurface(width, height);
+                    // 重新创建纹理和FBO，确保尺寸匹配
+                    if (width > 0 && height > 0) {
+                        mUnityTextureRGBA = new Texture2D(myContext, width, height, m_bCanUseGLBindVertexArray);
+                        mFBO = new FBO(mUnityTextureRGBA);
+                    }
+                    // 重新绑定表面到播放器
+                    AttackSurface();
+                } else if (surfaceTexture != null) {
+                    // 对于SurfaceTexture模式，更新缓冲区大小
+                    surfaceTexture.setDefaultBufferSize(width, height);
+                }
             }
         });
     }
