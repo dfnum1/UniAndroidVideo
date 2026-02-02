@@ -50,7 +50,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     SurfaceTexture surfaceTexture;
     Surface mySurface;
 
-    boolean m_UseImageReader = false;
+    boolean m_UseImageReader = true;
     ImageReader mVideImageReader;
 
     float[] mSurfaceTextureMat = new float[16];
@@ -270,7 +270,9 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
 
     public void Render() {
         synchronized (this) {
-            Log.d(TAG, "Render " + GetWidth() + "x" + GetHeight() + "   textid:" + m_TextureHandle);
+            //
+            // Log.d(TAG, "Render " + GetWidth() + "x" + GetHeight() + " textid:" +
+            // m_TextureHandle);
             if (GetWidth() <= 0 || GetHeight() <= 0)
                 return;
             if (m_UseImageReader) {
@@ -323,8 +325,8 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                 if (image != null) {
                     try {
                         // 处理Image数据并渲染
-                        RenderImageReaderFrame(image);
-                        // RenderImageXXX(image);
+                        // RenderImageReaderFrame(image);
+                        RenderImageNoGL(image);
                         m_nFrameCount++;
                         if (m_nFrameCount >= 1000000)
                             m_nFrameCount = 1;
@@ -369,27 +371,71 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
 
     }
 
-    void RenderImageXXX(Image image) {
+    void RenderImageNoGL(Image image) {
+        try {
         if (mUnityTexture == null) {
             mUnityTexture = new Texture2D(myContext, GetWidth(), GetHeight(), m_bCanUseGLBindVertexArray);
-            mFBO = new FBO(mUnityTexture);
-        }
-
-        if (mTexture2DExtRGBA == null) {
-            mTexture2DExtRGBA = new Texture2DExtYUV(myContext, GetWidth(), GetHeight(),
-                    m_bCanUseGLBindVertexArray);
         }
 
         if (this.unityMessage != null)
             this.unityMessage.OnVideoRenderBegin(this.m_nPlayIndex);
+            Image.Plane[] planes = image.getPlanes();
+            if (planes.length >= 3)
+             {
+                int width = image.getWidth();
+                int height = image.getHeight();
+                // 获取YUV数据
+                    ByteBuffer yBuffer = planes[0].getBuffer();
+                    ByteBuffer uBuffer = planes[1].getBuffer();
+                    ByteBuffer vBuffer = planes[2].getBuffer();
 
-        Matrix.setIdentityM(mSurfaceTextureMat, 0);
-        mFBO.FBOBegin();
-        GLES20.glViewport(0, 0, GetWidth(), GetHeight());
-        mTexture2DExtRGBA.draw(mSurfaceTextureMat, false);
-        mFBO.FBOEnd();
+                    int yRowStride = planes[0].getRowStride();
+                    int uvRowStride = planes[1].getRowStride();
+                    int uvPixelStride = planes[1].getPixelStride();
+
+                    // 直接创建像素数组，避免使用Bitmap
+                    int[] pixels = new int[width * height];
+
+                    // YUV转RGBA
+                    for (int i = 0; i < height; i++) {
+                        for (int j = 0; j < width; j++) {
+                            int y = yBuffer.get(i * yRowStride + j) & 0xFF;
+                            int u = uBuffer.get((i / 2) * uvRowStride + (j / 2) * uvPixelStride) & 0xFF;
+                            int v = vBuffer.get((i / 2) * uvRowStride + (j / 2) * uvPixelStride) & 0xFF;
+
+                            // YUV转RGB
+                            int r = (int) (y + 1.402f * (v - 128));
+                            int g = (int) (y - 0.344f * (u - 128) - 0.714f * (v - 128));
+                            int b = (int) (y + 1.772f * (u - 128));
+
+                            // clamp to [0, 255]
+                            r = Math.max(0, Math.min(255, r));
+                            g = Math.max(0, Math.min(255, g));
+                            b = Math.max(0, Math.min(255, b));
+
+                            pixels[i * width + j] = (0xFF << 24) | (r << 16) | (g << 8) | b;
+                        }
+                    }
+
+                    // 将像素数组转换为字节数组
+                    byte[] data = new byte[width * height * 4];
+                    for (int i = 0; i < pixels.length; i++) {
+                        int pixel = pixels[i];
+                        data[i * 4] = (byte) ((pixel >> 16) & 0xFF); // R
+                        data[i * 4 + 1] = (byte) ((pixel >> 8) & 0xFF); // G
+                        data[i * 4 + 2] = (byte) (pixel & 0xFF); // B
+                        data[i * 4 + 3] = (byte) ((pixel >> 24) & 0xFF); // A
+                    }
+
+            // 使用Texture2DExtRGBA的updateTexture方法更新纹理数据
+            mUnityTexture.updateTexture(width, height, data);
+        }
+
         if (this.unityMessage != null)
-            this.unityMessage.OnVideoRenderEnd(this.m_nPlayIndex);
+            this.unityMessage.OnVideoRenderEnd(this.m_nPlayIndex);            
+        } catch (Exception e) {
+            Log.e(TAG, "RenderImageNoGL Exception: " + e.getMessage());
+        }
     }
 
     void RenderImageReaderFrame(Image image) {
@@ -798,11 +844,6 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                 // 对于ImageReader模式，重新创建表面
                 if (m_UseImageReader) {
                     CreateExoSurface(width, height);
-                    // 重新创建纹理和FBO，确保尺寸匹配
-                    if (width > 0 && height > 0) {
-                        mUnityTextureRGBA = new Texture2D(myContext, width, height, m_bCanUseGLBindVertexArray);
-                        mFBO = new FBO(mUnityTextureRGBA);
-                    }
                     // 重新绑定表面到播放器
                     AttackSurface();
                 } else if (surfaceTexture != null) {
