@@ -26,6 +26,7 @@ import com.unity3d.Texture2DExt;
 import com.unity3d.Texture2DExtYUV;
 import com.unity3d.Texture2D;
 import com.unity3d.FBO;
+import android.os.Build;
 
 import com.google.android.exoplayer2.upstream.cache.Cache;
 
@@ -45,12 +46,11 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     private Texture2DExt mTexture2DExt;
     private Texture2DExtYUV mTexture2DExtRGBA;
     private Texture2D mUnityTexture;
-    private Texture2D mUnityTextureRGBA;
     private FBO mFBO;
     SurfaceTexture surfaceTexture;
     Surface mySurface;
 
-    boolean m_UseImageReader = true;
+    boolean m_UseImageReader = false;
     ImageReader mVideImageReader;
 
     float[] mSurfaceTextureMat = new float[16];
@@ -101,6 +101,45 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
             theClass.Render();
         }
     }
+    public static String getPrimaryAbi() {
+        // API 21+ (Android 5.0+) 推荐方式
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            String[] supportedAbis = Build.SUPPORTED_ABIS;
+            if (supportedAbis != null && supportedAbis.length > 0) {
+                return supportedAbis[0]; // 主 ABI（性能最优）
+            }
+        }
+        
+        return Build.CPU_ABI;
+    }
+    public static boolean isX8664() {
+        String abi = getPrimaryAbi();
+        return "x86_64".equals(abi);
+    }
+
+    public static boolean isEmulator() 
+    {
+        try
+        {
+            String[] mumuFiles = {
+                "/system/etc/mumu-configs"
+            };
+            for (String file : mumuFiles) 
+            {
+                if (new File(file).exists())
+                {
+                    Log.d(TAG, "Detected MuMu Emulator due to presence of file: " + file);
+                    return isX8664();
+                }
+            }
+        }
+        catch(Exception ex)
+        {
+            Log.e(TAG, "isEmulator Exception: " + ex.getMessage());
+        }
+
+        return false;
+    }
 
     public static void RendererSetupPlayer(int playerIndex, int iDeviceIndex) {
         Log.d(TAG, "RendererSetupPlayer" + playerIndex + " DeviceIndex:" + iDeviceIndex);
@@ -116,6 +155,19 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                 theClass.m_iOpenGLVersion = 3;
                 bOverride = true;
             }
+            else if(iDeviceIndex >=255)
+            {
+                //! 使用ImageReader模式
+                //! 目前在mumu模拟器上开启了这个模式，其余的还是默认
+                Log.d(TAG, "RendererSetupPlayer Use ImageReader mode");
+                theClass.m_UseImageReader = true;
+            }
+
+            if (isEmulator()) {
+                Log.d(TAG, "Detected Emulator, Force Enable ImageReader mode");
+                theClass.m_UseImageReader = true;
+            }
+
             if (bOverride) {
                 theClass.m_bCanUseGLBindVertexArray = false;// ((theClass.m_iOpenGLVersion > 2) &&
                                                             // (Build.VERSION.SDK_INT >= 18));
@@ -654,6 +706,10 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         if (mTexture2DExt != null)
             mTexture2DExt.destory();
         mTexture2DExt = null;
+        if (mTexture2DExtRGBA != null)
+            mTexture2DExtRGBA.destory();
+        mTexture2DExtRGBA = null;
+        
         m_TextureHandle = 0;
     }
 
