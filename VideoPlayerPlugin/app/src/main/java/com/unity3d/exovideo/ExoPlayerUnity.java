@@ -54,6 +54,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     ImageReader mVideImageReader;
 
     float[] mSurfaceTextureMat = new float[16];
+    private byte[] mCachedBodyData = null;
 
     int m_TextureHandle = 0;
 
@@ -376,7 +377,6 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         if (mUnityTexture == null) {
             mUnityTexture = new Texture2D(myContext, GetWidth(), GetHeight(), m_bCanUseGLBindVertexArray);
         }
-
         if (this.unityMessage != null)
             this.unityMessage.OnVideoRenderBegin(this.m_nPlayIndex);
             Image.Plane[] planes = image.getPlanes();
@@ -393,11 +393,16 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                     int uvRowStride = planes[1].getRowStride();
                     int uvPixelStride = planes[1].getPixelStride();
 
-                    // 直接创建像素数组，避免使用Bitmap
-                    int[] pixels = new int[width * height];
+                    // Check and reallocate cache if necessary
+                    if (mCachedBodyData == null || mCachedBodyData.length != width * height * 4) {
+                        mCachedBodyData = new byte[width * height * 4];
+                    }
+                    
+                    byte[] data = mCachedBodyData;
 
                     // YUV转RGBA
                     for (int i = 0; i < height; i++) {
+                        int invertedRowIndex = (height - 1 - i) * width;
                         for (int j = 0; j < width; j++) {
                             int y = yBuffer.get(i * yRowStride + j) & 0xFF;
                             int u = uBuffer.get((i / 2) * uvRowStride + (j / 2) * uvPixelStride) & 0xFF;
@@ -413,18 +418,13 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                             g = Math.max(0, Math.min(255, g));
                             b = Math.max(0, Math.min(255, b));
 
-                            pixels[i * width + j] = (0xFF << 24) | (r << 16) | (g << 8) | b;
+                            // Flip vertically and write directly to byte array (RGBA)
+                            int pixelIndex = (invertedRowIndex + j) * 4;
+                            data[pixelIndex] = (byte) r;     // R
+                            data[pixelIndex + 1] = (byte) g; // G
+                            data[pixelIndex + 2] = (byte) b; // B
+                            data[pixelIndex + 3] = (byte) 255; // A
                         }
-                    }
-
-                    // 将像素数组转换为字节数组
-                    byte[] data = new byte[width * height * 4];
-                    for (int i = 0; i < pixels.length; i++) {
-                        int pixel = pixels[i];
-                        data[i * 4] = (byte) ((pixel >> 16) & 0xFF); // R
-                        data[i * 4 + 1] = (byte) ((pixel >> 8) & 0xFF); // G
-                        data[i * 4 + 2] = (byte) (pixel & 0xFF); // B
-                        data[i * 4 + 3] = (byte) ((pixel >> 24) & 0xFF); // A
                     }
 
             // 使用Texture2DExtRGBA的updateTexture方法更新纹理数据
