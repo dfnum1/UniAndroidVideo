@@ -201,6 +201,7 @@ public class VideoPlayer
             {
                 updatePlaybackState();
             }
+            
 
             @Override
             public void onPositionDiscontinuity(Player.PositionInfo oldPosition, Player.PositionInfo newPosition, int reason)
@@ -214,70 +215,79 @@ public class VideoPlayer
                 updatePlaybackState();
             }
 
+            @Override
+            public void onPlayerErrorChanged(PlaybackException error)
+            {
+                if (error != null)
+                {
+                   Log.d(TAG, "ExoPlayer Error: " + error.getMessage());
+                }
+            }
+
 
             @Override
-    public void onMediaItemTransition(MediaItem availableCommands,int reason) {}
+            public void onMediaItemTransition(MediaItem availableCommands,int reason) {}
             @Override
-    public void onAvailableCommandsChanged(Player.Commands availableCommands) {}
-    @Override
-    public void onTimelineChanged(Timeline timeline, int reason) {}
-    @Override
-    public void onIsLoadingChanged(boolean isLoading) {}
-    @Override
-    public void onPlayerError(PlaybackException error) {}
-    @Override
-    public void onRepeatModeChanged(int repeatMode) 
-    {
-        isLooping = exoPlayer.getRepeatMode() == Player.REPEAT_MODE_ONE;   
-    }
-    @Override
-    public void onShuffleModeEnabledChanged(boolean shuffleModeEnabled) {}
-    @Override
-    public void onTracksChanged(TrackGroupArray trackGroups, TrackSelectionArray trackSelections) {
-        // 空实现即可
-    }
-    @Override
-    public void onMediaMetadataChanged(MediaMetadata mediaMetadata) {}
-    @Override
-    public void onPlaylistMetadataChanged(MediaMetadata playlistMetadata) {}
-    @Override
-    public void onIsPlayingChanged(boolean isPlaying) {}
-    @Override
-    public void onDeviceInfoChanged(DeviceInfo deviceInfo) {}
-    @Override
-    public void onDeviceVolumeChanged(int volume, boolean muted) {}
-    @Override
-    public void onVideoSizeChanged(VideoSize videoSize) {}
-    @Override
-    public void onSurfaceSizeChanged(int w, int h) 
-    {
-       // width = w;
-      //  height = h;
-       // isDirtySurfaceSize = true;
-       // Log.d(TAG, "onSurfaceSizeChanged " + width + "x" + height);
-    }
+            public void onAvailableCommandsChanged(Player.Commands availableCommands) {}
+            @Override
+            public void onTimelineChanged(Timeline timeline, int reason) {}
+            @Override
+            public void onIsLoadingChanged(boolean isLoading) {}
+            @Override
+            public void onPlayerError(PlaybackException error) {}
+            @Override
+            public void onRepeatModeChanged(int repeatMode) 
+            {
+                isLooping = exoPlayer.getRepeatMode() == Player.REPEAT_MODE_ONE;   
+            }
+            @Override
+            public void onShuffleModeEnabledChanged(boolean shuffleModeEnabled) {}
+            @Override
+            public void onTracksChanged(TrackGroupArray trackGroups, TrackSelectionArray trackSelections) {
+                // 空实现即可
+            }
+            @Override
+            public void onMediaMetadataChanged(MediaMetadata mediaMetadata) {}
+            @Override
+            public void onPlaylistMetadataChanged(MediaMetadata playlistMetadata) {}
+            @Override
+            public void onIsPlayingChanged(boolean isPlaying) {}
+            @Override
+            public void onDeviceInfoChanged(DeviceInfo deviceInfo) {}
+            @Override
+            public void onDeviceVolumeChanged(int volume, boolean muted) {}
+            @Override
+            public void onVideoSizeChanged(VideoSize videoSize) {}
+            @Override
+            public void onSurfaceSizeChanged(int w, int h) 
+            {
+            // width = w;
+            //  height = h;
+            // isDirtySurfaceSize = true;
+            // Log.d(TAG, "onSurfaceSizeChanged " + width + "x" + height);
+            }
 
-    @Override
-    public void onPlayerStateChanged(boolean b, int re)
-    {
-         isLooping = exoPlayer.getRepeatMode() == Player.REPEAT_MODE_ONE;   
-    }
+            @Override
+            public void onPlayerStateChanged(boolean b, int re)
+            {
+                isLooping = exoPlayer.getRepeatMode() == Player.REPEAT_MODE_ONE;   
+            }
 
-    @Override
-    public void onEvents(Player player, Player.Events events) {
-        // 空实现即可，必须存在
-    }
+            @Override
+            public void onEvents(Player player, Player.Events events) {
+                // 空实现即可，必须存在
+            }
 
-        @Override
-    public void onLoadingChanged(boolean b) {
-        // 空实现即可，必须存在
-    }
+                @Override
+            public void onLoadingChanged(boolean b) {
+                // 空实现即可，必须存在
+            }
 
-        @Override
-    public void onVideoSizeChanged(int x, int y, int z, float r) {}
-    
-    @Override
-    public void onRenderedFirstFrame(){}
+                @Override
+            public void onVideoSizeChanged(int x, int y, int z, float r) {}
+            
+            @Override
+            public void onRenderedFirstFrame(){}
     }
 
 
