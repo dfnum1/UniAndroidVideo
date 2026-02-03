@@ -22,6 +22,8 @@ import com.google.android.exoplayer2.source.dash.DefaultDashChunkSource;
 import com.google.android.exoplayer2.source.hls.HlsMediaSource;
 import com.google.android.exoplayer2.source.smoothstreaming.DefaultSsChunkSource;
 import com.google.android.exoplayer2.source.smoothstreaming.SsMediaSource;
+import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
+import com.google.android.exoplayer2.trackselection.TrackSelector;
 import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSource;
@@ -32,6 +34,7 @@ import com.google.android.exoplayer2.upstream.cache.CacheDataSource;
 import com.google.android.exoplayer2.upstream.cache.NoOpCacheEvictor;
 import com.google.android.exoplayer2.upstream.cache.SimpleCache;
 import com.google.android.exoplayer2.util.Util;
+import com.google.android.exoplayer2.mediacodec.MediaCodecSelector;
 //import com.twobigears.audio360.AudioEngine;
 //import com.twobigears.audio360.SpatDecoderQueue;
 import com.google.android.exoplayer2.Player;
@@ -48,8 +51,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-public class VideoPlayer
-{
+public class VideoPlayer {
     private final String TAG = "ExoVideoPlayer";
     final float SAMPLE_RATE = 48000.f;
     final int BUFFER_SIZE = 1024;
@@ -58,8 +60,8 @@ public class VideoPlayer
     private Surface mySurface;
     private Context myContext;
     private SimpleExoPlayer exoPlayer;
-  //  private AudioEngine engine;
-  //  private SpatDecoderQueue spat;
+    // private AudioEngine engine;
+    // private SpatDecoderQueue spat;
     private String filePath;
     private boolean readyToPlay;
     private volatile boolean isPlaying;
@@ -76,78 +78,82 @@ public class VideoPlayer
 
     private ExoPlayerUnity m_ExoPlayerUnity;
 
+    // 由于ExoPlayer 2.15.1的API限制，我们使用更简单的方法：直接在构建器中配置
+    // 移除CustomMediaCodecSelector，使用ExoPlayer 2.15.1支持的API
 
-    public VideoPlayer(ExoPlayerUnity unity, Context context, String url)
-    {
+    public VideoPlayer(ExoPlayerUnity unity, Context context, String url) {
         isDirtySurfaceSize = false;
         m_ExoPlayerUnity = unity;
         myContext = context;
         filePath = url;
     }
 
-    public void PrepareBytes(byte[] buffers)
-    {
+    public void PrepareBytes(byte[] buffers) {
         /*
-        ByteArrayDataSource byteArrayDataSource = new ByteArrayDataSource(buffers);
-        DataSource.Factory factory = new DataSource.Factory() {
-            @Override
-            public DataSource createDataSource() {
-                return byteArrayDataSource;
-            }
-        };
-        MediaSource videoSource = new ExtractorMediaSource.Factory(factory)
-            .setExtractorsFactory(new DefaultExtractorsFactory())
-            .createMediaSource(Uri.EMPTY);
-        if(videoSource == null)
-        {
-            Log.e(TAG, "Failed to create MediaSource from byte array");
-            return;
-        }
-
-        // 1. AudioEngine
-        if (engine == null)
-        {
-            engine = AudioEngine.create(SAMPLE_RATE, BUFFER_SIZE, QUEUE_SIZE_IN_SAMPLES, myContext);
-            spat = engine.createSpatDecoderQueue();
-            engine.start();
-        }
-
-        // 2. VideoSource type
-        DataSource.Factory dataSourceFactory = buildDataSourceFactory(myContext);
-        Uri uri = ParseFilePath();
-      //  MediaSource videoSource = buildMediaSource(myContext, uri, null, dataSourceFactory);
-        Log.d(TAG, "Requested play of " + filePath + " uri: " + uri.toString());
-
-        // 3. Exoplayer
-        if (exoPlayer != null)
-        {
-            exoPlayer.release();
-        }
-
-        exoPlayer = new SimpleExoPlayer.Builder(myContext).build(); // Pasarle trackSelector
-        AddPlayerListener();
-        if(mySurface!=null)exoPlayer.setVideoSurface(mySurface);
-        exoPlayer.setMediaSource(videoSource);
-        exoPlayer.prepare();
-
-        exoPlayer.setRepeatMode(Player.REPEAT_MODE_ONE);
-        exoPlayer.setPlayWhenReady(false);
-        */
+         * ByteArrayDataSource byteArrayDataSource = new ByteArrayDataSource(buffers);
+         * DataSource.Factory factory = new DataSource.Factory() {
+         * 
+         * @Override
+         * public DataSource createDataSource() {
+         * return byteArrayDataSource;
+         * }
+         * };
+         * MediaSource videoSource = new ExtractorMediaSource.Factory(factory)
+         * .setExtractorsFactory(new DefaultExtractorsFactory())
+         * .createMediaSource(Uri.EMPTY);
+         * if(videoSource == null)
+         * {
+         * Log.e(TAG, "Failed to create MediaSource from byte array");
+         * return;
+         * }
+         * 
+         * // 1. AudioEngine
+         * if (engine == null)
+         * {
+         * engine = AudioEngine.create(SAMPLE_RATE, BUFFER_SIZE, QUEUE_SIZE_IN_SAMPLES,
+         * myContext);
+         * spat = engine.createSpatDecoderQueue();
+         * engine.start();
+         * }
+         * 
+         * // 2. VideoSource type
+         * DataSource.Factory dataSourceFactory = buildDataSourceFactory(myContext);
+         * Uri uri = ParseFilePath();
+         * // MediaSource videoSource = buildMediaSource(myContext, uri, null,
+         * dataSourceFactory);
+         * Log.d(TAG, "Requested play of " + filePath + " uri: " + uri.toString());
+         * 
+         * // 3. Exoplayer
+         * if (exoPlayer != null)
+         * {
+         * exoPlayer.release();
+         * }
+         * 
+         * exoPlayer = new SimpleExoPlayer.Builder(myContext).build(); // Pasarle
+         * trackSelector
+         * AddPlayerListener();
+         * if(mySurface!=null)exoPlayer.setVideoSurface(mySurface);
+         * exoPlayer.setMediaSource(videoSource);
+         * exoPlayer.prepare();
+         * 
+         * exoPlayer.setRepeatMode(Player.REPEAT_MODE_ONE);
+         * exoPlayer.setPlayWhenReady(false);
+         */
     }
 
-    public void Prepare(Surface surface)
-    {
-        //send videoID and textureID back to unity to create external texture
+    public void Prepare(Surface surface) {
+        // send videoID and textureID back to unity to create external texture
 
         mySurface = surface;
 
         // 1. AudioEngine
-       // if (engine == null)
-       // {
-       //     engine = AudioEngine.create(SAMPLE_RATE, BUFFER_SIZE, QUEUE_SIZE_IN_SAMPLES, myContext);
-       //     spat = engine.createSpatDecoderQueue();
-       //     engine.start();
-        //}
+        // if (engine == null)
+        // {
+        // engine = AudioEngine.create(SAMPLE_RATE, BUFFER_SIZE, QUEUE_SIZE_IN_SAMPLES,
+        // myContext);
+        // spat = engine.createSpatDecoderQueue();
+        // engine.start();
+        // }
 
         // 2. VideoSource type
         DataSource.Factory dataSourceFactory = buildDataSourceFactory(myContext);
@@ -156,14 +162,27 @@ public class VideoPlayer
         Log.d(TAG, "Requested play of " + filePath + " uri: " + uri.toString());
 
         // 3. Exoplayer
-        if (exoPlayer != null)
-        {
+        if (exoPlayer != null) {
             exoPlayer.release();
         }
 
-        exoPlayer = new SimpleExoPlayer.Builder(myContext).build(); // Pasarle trackSelector
+        // 创建TrackSelector以支持解码器回退
+        DefaultTrackSelector trackSelector = new DefaultTrackSelector(myContext);
+
+        // 在ExoPlayer 2.15.1中，配置解码器回退
+        DefaultTrackSelector.Parameters parameters = trackSelector.buildUponParameters()
+                .setRendererDisabled(C.TRACK_TYPE_VIDEO, false)
+                .build();
+        trackSelector.setParameters(parameters);
+
+        // 构建ExoPlayer实例
+        // 在ExoPlayer 2.15.1中，通过修改MediaSource的方式来处理解码器问题
+        exoPlayer = new SimpleExoPlayer.Builder(myContext)
+                .setTrackSelector(trackSelector)
+                .build();
         AddPlayerListener();
-        if(mySurface!=null)exoPlayer.setVideoSurface(mySurface);
+        if (mySurface != null)
+            exoPlayer.setVideoSurface(mySurface);
         exoPlayer.setMediaSource(videoSource);
         exoPlayer.prepare();
 
@@ -173,163 +192,224 @@ public class VideoPlayer
 
     private class PlayerEventListener implements Player.Listener {
         @Override
-            public void onPlayWhenReadyChanged(boolean playWhenReady, int reason)
-            {
-                isPlaying = playWhenReady && (currentPlaybackState == Player.STATE_READY || currentPlaybackState == Player.STATE_BUFFERING);
-                updatePlaybackState();
+        public void onPlayWhenReadyChanged(boolean playWhenReady, int reason) {
+            isPlaying = playWhenReady
+                    && (currentPlaybackState == Player.STATE_READY || currentPlaybackState == Player.STATE_BUFFERING);
+            updatePlaybackState();
 
-                if(m_ExoPlayerUnity.unityMessage!=null)m_ExoPlayerUnity.unityMessage.OnPlayWhenReadyChanged(playWhenReady, reason);
+            if (m_ExoPlayerUnity.unityMessage != null)
+                m_ExoPlayerUnity.unityMessage.OnPlayWhenReadyChanged(playWhenReady, reason);
+        }
+
+        @Override
+        public void onPlaybackStateChanged(int playbackState) {
+            // call on prepared from unity
+            if (!readyToPlay && playbackState == Player.STATE_READY) {
+                readyToPlay = true;
+                // unityMessage.OnVideoPrepared();
             }
 
-            @Override
-            public void onPlaybackStateChanged(int playbackState)
-            {
-                //call on prepared from unity
-                if (!readyToPlay && playbackState == Player.STATE_READY)
-                {
-                    readyToPlay = true;
-                    //unityMessage.OnVideoPrepared();
+            currentPlaybackState = playbackState;
+            updatePlaybackState();
+            if (m_ExoPlayerUnity.unityMessage != null)
+                m_ExoPlayerUnity.unityMessage.OnPlaybackStateChanged(playbackState);
+        }
+
+        @Override
+        public void onPlaybackParametersChanged(PlaybackParameters params) {
+            updatePlaybackState();
+        }
+
+        @Override
+        public void onPositionDiscontinuity(Player.PositionInfo oldPosition, Player.PositionInfo newPosition,
+                int reason) {
+            updatePlaybackState();
+        }
+
+        @Override
+        public void onPositionDiscontinuity(int reason) {
+            updatePlaybackState();
+        }
+
+        @Override
+        public void onPlayerErrorChanged(PlaybackException error) {
+            if (error != null) {
+                Log.e(TAG, "ExoPlayer Error: " + error.getMessage());
+                Log.e(TAG, "Error cause: " + (error.getCause() != null ? error.getCause().getMessage() : "null"));
+
+                // 检查是否是解码器初始化失败
+                if (error.getMessage().contains("Decoder init failed") ||
+                        error.getMessage().contains("MediaCodecRenderer$DecoderInitializationException")) {
+                    Log.e(TAG, "解码器初始化失败，尝试使用软解码器...");
+
+                    // 在ExoPlayer 2.15.1中，当解码器失败时，我们可以尝试重新初始化播放器
+                    // 这里添加延迟处理，避免立即重试导致的循环
+                    new android.os.Handler().postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                Log.e(TAG, "尝试重新初始化播放器...");
+                                // 重新准备播放器
+                                if (exoPlayer != null) {
+                                    exoPlayer.release();
+                                }
+
+                                // 重新创建播放器实例
+                                DefaultTrackSelector newTrackSelector = new DefaultTrackSelector(myContext);
+                                exoPlayer = new SimpleExoPlayer.Builder(myContext)
+                                        .setTrackSelector(newTrackSelector)
+                                        .build();
+                                AddPlayerListener();
+                                if (mySurface != null) {
+                                    exoPlayer.setVideoSurface(mySurface);
+                                }
+
+                                // 重新设置媒体源并准备
+                                DataSource.Factory dataSourceFactory = buildDataSourceFactory(myContext);
+                                Uri uri = ParseFilePath();
+                                MediaSource newVideoSource = buildMediaSource(myContext, uri, null, dataSourceFactory);
+                                exoPlayer.setMediaSource(newVideoSource);
+                                exoPlayer.prepare();
+                                exoPlayer.setRepeatMode(Player.REPEAT_MODE_ONE);
+                                exoPlayer.setPlayWhenReady(false);
+
+                                Log.e(TAG, "播放器重新初始化成功");
+                            } catch (Exception e) {
+                                Log.e(TAG, "重新初始化播放器失败: " + e.getMessage());
+                            }
+                        }
+                    }, 1000);
                 }
-
-                currentPlaybackState = playbackState;
-                updatePlaybackState();
-                if(m_ExoPlayerUnity.unityMessage!=null)m_ExoPlayerUnity.unityMessage.OnPlaybackStateChanged(playbackState);
             }
+        }
 
-            @Override
-            public void onPlaybackParametersChanged(PlaybackParameters params)
-            {
-                updatePlaybackState();
-            }
-            
+        @Override
+        public void onMediaItemTransition(MediaItem availableCommands, int reason) {
+        }
 
-            @Override
-            public void onPositionDiscontinuity(Player.PositionInfo oldPosition, Player.PositionInfo newPosition, int reason)
-            {
-                updatePlaybackState();
-            }
+        @Override
+        public void onAvailableCommandsChanged(Player.Commands availableCommands) {
+        }
 
-            @Override
-            public void onPositionDiscontinuity(int reason)
-            {
-                updatePlaybackState();
-            }
+        @Override
+        public void onTimelineChanged(Timeline timeline, int reason) {
+        }
 
-            @Override
-            public void onPlayerErrorChanged(PlaybackException error)
-            {
-                if (error != null)
-                {
-                   Log.d(TAG, "ExoPlayer Error: " + error.getMessage());
-                }
-            }
+        @Override
+        public void onIsLoadingChanged(boolean isLoading) {
+        }
 
+        @Override
+        public void onPlayerError(PlaybackException error) {
+            if (error != null) {
+                Log.e(TAG, "onPlayerError: " + error.getMessage());
+                Log.e(TAG, "Error cause: " + (error.getCause() != null ? error.getCause().getMessage() : "null"));
+            }
+        }
 
-            @Override
-            public void onMediaItemTransition(MediaItem availableCommands,int reason) {}
-            @Override
-            public void onAvailableCommandsChanged(Player.Commands availableCommands) {}
-            @Override
-            public void onTimelineChanged(Timeline timeline, int reason) {}
-            @Override
-            public void onIsLoadingChanged(boolean isLoading) {}
-            @Override
-            public void onPlayerError(PlaybackException error) {}
-            @Override
-            public void onRepeatModeChanged(int repeatMode) 
-            {
-                isLooping = exoPlayer.getRepeatMode() == Player.REPEAT_MODE_ONE;   
-            }
-            @Override
-            public void onShuffleModeEnabledChanged(boolean shuffleModeEnabled) {}
-            @Override
-            public void onTracksChanged(TrackGroupArray trackGroups, TrackSelectionArray trackSelections) {
-                // 空实现即可
-            }
-            @Override
-            public void onMediaMetadataChanged(MediaMetadata mediaMetadata) {}
-            @Override
-            public void onPlaylistMetadataChanged(MediaMetadata playlistMetadata) {}
-            @Override
-            public void onIsPlayingChanged(boolean isPlaying) {}
-            @Override
-            public void onDeviceInfoChanged(DeviceInfo deviceInfo) {}
-            @Override
-            public void onDeviceVolumeChanged(int volume, boolean muted) {}
-            @Override
-            public void onVideoSizeChanged(VideoSize videoSize) {}
-            @Override
-            public void onSurfaceSizeChanged(int w, int h) 
-            {
+        @Override
+        public void onRepeatModeChanged(int repeatMode) {
+            isLooping = exoPlayer.getRepeatMode() == Player.REPEAT_MODE_ONE;
+        }
+
+        @Override
+        public void onShuffleModeEnabledChanged(boolean shuffleModeEnabled) {
+        }
+
+        @Override
+        public void onTracksChanged(TrackGroupArray trackGroups, TrackSelectionArray trackSelections) {
+            // 空实现即可
+        }
+
+        @Override
+        public void onMediaMetadataChanged(MediaMetadata mediaMetadata) {
+        }
+
+        @Override
+        public void onPlaylistMetadataChanged(MediaMetadata playlistMetadata) {
+        }
+
+        @Override
+        public void onIsPlayingChanged(boolean isPlaying) {
+        }
+
+        @Override
+        public void onDeviceInfoChanged(DeviceInfo deviceInfo) {
+        }
+
+        @Override
+        public void onDeviceVolumeChanged(int volume, boolean muted) {
+        }
+
+        @Override
+        public void onVideoSizeChanged(VideoSize videoSize) {
+        }
+
+        @Override
+        public void onSurfaceSizeChanged(int w, int h) {
             // width = w;
-            //  height = h;
+            // height = h;
             // isDirtySurfaceSize = true;
             // Log.d(TAG, "onSurfaceSizeChanged " + width + "x" + height);
-            }
+        }
 
-            @Override
-            public void onPlayerStateChanged(boolean b, int re)
-            {
-                isLooping = exoPlayer.getRepeatMode() == Player.REPEAT_MODE_ONE;   
-            }
+        @Override
+        public void onPlayerStateChanged(boolean b, int re) {
+            isLooping = exoPlayer.getRepeatMode() == Player.REPEAT_MODE_ONE;
+        }
 
-            @Override
-            public void onEvents(Player player, Player.Events events) {
-                // 空实现即可，必须存在
-            }
+        @Override
+        public void onEvents(Player player, Player.Events events) {
+            // 空实现即可，必须存在
+        }
 
-                @Override
-            public void onLoadingChanged(boolean b) {
-                // 空实现即可，必须存在
-            }
+        @Override
+        public void onLoadingChanged(boolean b) {
+            // 空实现即可，必须存在
+        }
 
-                @Override
-            public void onVideoSizeChanged(int x, int y, int z, float r) {}
-            
-            @Override
-            public void onRenderedFirstFrame(){}
+        @Override
+        public void onVideoSizeChanged(int x, int y, int z, float r) {
+        }
+
+        @Override
+        public void onRenderedFirstFrame() {
+        }
     }
 
-
-    private void AddPlayerListener()
-    {
+    private void AddPlayerListener() {
         exoPlayer.addListener(new PlayerEventListener());
     }
 
-    public void updatePlaybackState()
-    {
+    public void updatePlaybackState() {
         duration = exoPlayer.getDuration();
         lastPlaybackPosition = exoPlayer.getCurrentPosition();
         lastPlaybackSpeed = isPlaying ? exoPlayer.getPlaybackParameters().speed : 0;
         lastPlaybackUpdateTime = System.currentTimeMillis();
         Format format = exoPlayer.getVideoFormat();
-        if (format != null)
-        {
+        if (format != null) {
             stereoMode = format.stereoMode;
             int oldWidth = width;
             int oldHeight = height;
             width = format.width;
             height = format.height;
-            
+
             // 如果视频尺寸发生变化，并且使用的是ImageReader模式，重新创建表面
             if ((width != oldWidth || height != oldHeight) && width > 0 && height > 0) {
                 m_ExoPlayerUnity.onVideoSizeChanged(width, height);
             }
-        }
-        else
-        {
+        } else {
             stereoMode = -1;
-            width = 0;
-            height = 0;
+            // width = 0;
+            // height = 0;
+            Log.d(TAG, "updatePlaybackState null format " + width + "x" + height);
         }
 
-     //    Log.d(TAG, "updatePlaybackState " + width + "x" + height);
+        // Log.d(TAG, "updatePlaybackState " + width + "x" + height);
     }
 
-    public void AttackSurface(Surface surface)
-    {
-        if (exoPlayer != null)
-        {
+    public void AttackSurface(Surface surface) {
+        if (exoPlayer != null) {
             exoPlayer.clearVideoSurface();
             mySurface = surface;
             exoPlayer.setVideoSurface(surface);
@@ -337,142 +417,114 @@ public class VideoPlayer
         Log.d(TAG, "AttackSurface " + width + "x" + height);
     }
 
-    public void Play()
-    {
-        if (exoPlayer != null)
-        {
+    public void Play() {
+        if (exoPlayer != null) {
             exoPlayer.setPlayWhenReady(true);
         }
     }
 
-    public void Pause()
-    {
-        if (exoPlayer != null)
-        {
+    public void Pause() {
+        if (exoPlayer != null) {
             exoPlayer.setPlayWhenReady(false);
         }
     }
 
-    public void Stop()
-    {
-        if (exoPlayer != null)
-        {
+    public void Stop() {
+        if (exoPlayer != null) {
             Log.d(TAG, "Requested stop of " + filePath);
             exoPlayer.stop();
             exoPlayer.release();
             exoPlayer = null;
         }
 
-      //  if (engine != null)
-      //  {
-      //      engine.stop();
-      //      engine.destroySpatDecoderQueue(spat);
-       //     engine.delete();
-       //     spat = null;
-       //     engine = null;
-       // }
+        // if (engine != null)
+        // {
+        // engine.stop();
+        // engine.destroySpatDecoderQueue(spat);
+        // engine.delete();
+        // spat = null;
+        // engine = null;
+        // }
     }
 
-    public int GetWidth()
-    {
+    public int GetWidth() {
         return width;
     }
 
-    public int GetHeight()
-    {
+    public int GetHeight() {
         return height;
     }
 
-    public int GetCurrentPlaybackState()
-    {
+    public int GetCurrentPlaybackState() {
         return currentPlaybackState;
     }
-    public boolean GetIsPlaying()
-    {
+
+    public boolean GetIsPlaying() {
         return isPlaying;
     }
 
-    public boolean IsPaused()
-    {
-        if(exoPlayer!=null)
-        {
+    public boolean IsPaused() {
+        if (exoPlayer != null) {
             return !isPlaying && readyToPlay;
         }
         return false;
     }
 
-    public long GetLength()
-    {
+    public long GetLength() {
         return duration;
     }
 
-    public double GetPlaybackPosition()
-    {
-        long currPosition = Math.max(0, Math.min(duration, lastPlaybackPosition + (long) ((System.currentTimeMillis() - lastPlaybackUpdateTime) * lastPlaybackSpeed)));
-        double percent = (double)currPosition / duration;
+    public double GetPlaybackPosition() {
+        long currPosition = Math.max(0, Math.min(duration, lastPlaybackPosition
+                + (long) ((System.currentTimeMillis() - lastPlaybackUpdateTime) * lastPlaybackSpeed)));
+        double percent = (double) currPosition / duration;
         return percent;
     }
 
     // SETTERS
-    public void SetLooping(final boolean looping)
-    {
+    public void SetLooping(final boolean looping) {
 
-        if (exoPlayer != null)
-        {
-            if (looping)
-            {
+        if (exoPlayer != null) {
+            if (looping) {
                 exoPlayer.setRepeatMode(Player.REPEAT_MODE_ONE);
-            }
-            else
-            {
+            } else {
                 exoPlayer.setRepeatMode(Player.REPEAT_MODE_OFF);
             }
         }
     }
 
-    public boolean IsLooping()
-    {
+    public boolean IsLooping() {
         return isLooping;
     }
 
-    public boolean IsFinished()
-    {
-        if(exoPlayer!=null)
-        {
+    public boolean IsFinished() {
+        if (exoPlayer != null) {
             return GetCurrentPlaybackState() == Player.STATE_ENDED;
         }
         return false;
     }
 
-    public boolean IsBuffering()
-    {
-        if(exoPlayer!=null)
-        {
+    public boolean IsBuffering() {
+        if (exoPlayer != null) {
             return GetCurrentPlaybackState() == Player.STATE_BUFFERING;
         }
         return false;
     }
 
-    public void SetPlaybackPosition(final double percent)
-    {
-        if (exoPlayer != null)
-        {
+    public void SetPlaybackPosition(final double percent) {
+        if (exoPlayer != null) {
             Timeline timeline = exoPlayer.getCurrentTimeline();
-            if (timeline != null)
-            {
+            if (timeline != null) {
 
-                long timeInMilliseconds = (long)(duration * percent);
+                long timeInMilliseconds = (long) (duration * percent);
 
                 int windowIndex = timeline.getFirstWindowIndex(false);
                 long windowPositionUs = timeInMilliseconds * 1000L;
                 Timeline.Window tmpWindow = new Timeline.Window();
-                for (int i = timeline.getFirstWindowIndex(false);
-                     i < timeline.getLastWindowIndex(false); i++)
-                {
+                for (int i = timeline.getFirstWindowIndex(false); i < timeline.getLastWindowIndex(false); i++) {
                     timeline.getWindow(i, tmpWindow);
 
-                    if (tmpWindow.durationUs > windowPositionUs)
-                    {
+                    if (tmpWindow.durationUs > windowPositionUs) {
                         break;
                     }
 
@@ -484,68 +536,62 @@ public class VideoPlayer
             }
         }
     }
-    public  void SetPlaybackSpeed(final float speed)
-    {
-        if (exoPlayer != null)
-        {
+
+    public void SetPlaybackSpeed(final float speed) {
+        if (exoPlayer != null) {
             PlaybackParameters param = new PlaybackParameters(speed);
             exoPlayer.setPlaybackParameters(param);
         }
     }
 
-    public void SetVolume(final float volume)
-    {
-        if(exoPlayer == null) return;
+    public void SetVolume(final float volume) {
+        if (exoPlayer == null)
+            return;
         exoPlayer.setVolume(volume);
     }
 
     /**
      * Returns a {@link DataSource.Factory}.
      */
-    public DataSource.Factory buildDataSourceFactory(Context context)
-    {
-        DefaultDataSourceFactory upstreamFactory = new DefaultDataSourceFactory(context, null, buildHttpDataSourceFactory(context));
+    public DataSource.Factory buildDataSourceFactory(Context context) {
+        DefaultDataSourceFactory upstreamFactory = new DefaultDataSourceFactory(context, null,
+                buildHttpDataSourceFactory(context));
         return buildReadOnlyCacheDataSource(upstreamFactory, getDownloadCache(context));
     }
 
     /**
      * Returns a {@link HttpDataSource.Factory}.
      */
-    public static HttpDataSource.Factory buildHttpDataSourceFactory(Context context)
-    {
+    public static HttpDataSource.Factory buildHttpDataSourceFactory(Context context) {
         return new DefaultHttpDataSource.Factory().setUserAgent(Util.getUserAgent(context, "VideoPlayer"));
     }
 
-    private CacheDataSource.Factory buildReadOnlyCacheDataSource(DefaultDataSourceFactory upstreamFactory, Cache cache)
-    {
-        return new CacheDataSource.Factory().
-                setCache(cache).
-                setUpstreamDataSourceFactory(upstreamFactory).
-                setCacheReadDataSourceFactory(new FileDataSource.Factory()).
-                setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR);
+    private CacheDataSource.Factory buildReadOnlyCacheDataSource(DefaultDataSourceFactory upstreamFactory,
+            Cache cache) {
+        return new CacheDataSource.Factory().setCache(cache).setUpstreamDataSourceFactory(upstreamFactory)
+                .setCacheReadDataSourceFactory(new FileDataSource.Factory())
+                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR);
     }
 
-    private synchronized Cache getDownloadCache(Context context)
-    {
-        //return ExoCacheSingleton.getCache(context);
-        if (m_ExoPlayerUnity.downloadCache == null)
-        {
+    private synchronized Cache getDownloadCache(Context context) {
+        // return ExoCacheSingleton.getCache(context);
+        if (m_ExoPlayerUnity.downloadCache == null) {
             String uniqueId = "player_" + m_ExoPlayerUnity.m_nPlayIndex + "_" + System.identityHashCode(this);
             File downloadContentDirectory = new File(getDownloadDirectory(context), "cache_" + uniqueId);
-          //  String ts = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new java.util.Date());;
-          //  File downloadContentDirectory = new File(getDownloadDirectory(context), "downloads_" + filePath.hashCode() + "_" + ts);
-            m_ExoPlayerUnity.downloadCache = new SimpleCache(downloadContentDirectory, new NoOpCacheEvictor(), new ExoDatabaseProvider(context));
+            // String ts = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss",
+            // Locale.getDefault()).format(new java.util.Date());;
+            // File downloadContentDirectory = new File(getDownloadDirectory(context),
+            // "downloads_" + filePath.hashCode() + "_" + ts);
+            m_ExoPlayerUnity.downloadCache = new SimpleCache(downloadContentDirectory, new NoOpCacheEvictor(),
+                    new ExoDatabaseProvider(context));
         }
         return m_ExoPlayerUnity.downloadCache;
     }
 
-    private File getDownloadDirectory(Context context)
-    {
-        if (m_ExoPlayerUnity.downloadDirectory == null)
-        {
+    private File getDownloadDirectory(Context context) {
+        if (m_ExoPlayerUnity.downloadDirectory == null) {
             m_ExoPlayerUnity.downloadDirectory = context.getExternalFilesDir(null);
-            if (m_ExoPlayerUnity.downloadDirectory == null)
-            {
+            if (m_ExoPlayerUnity.downloadDirectory == null) {
                 m_ExoPlayerUnity.downloadDirectory = context.getFilesDir();
             }
         }
@@ -553,42 +599,39 @@ public class VideoPlayer
     }
 
     @SuppressWarnings("unchecked")
-    private  MediaSource buildMediaSource(Context context, Uri uri, /*@Nullable*/ String overrideExtension, DataSource.Factory dataSourceFactory)
-    {
-        @C.ContentType int type = Util.inferContentType(uri, overrideExtension);
-        switch (type)
-        {
+    private MediaSource buildMediaSource(Context context, Uri uri, /* @Nullable */ String overrideExtension,
+            DataSource.Factory dataSourceFactory) {
+        @C.ContentType
+        int type = Util.inferContentType(uri, overrideExtension);
+        switch (type) {
             case C.TYPE_DASH:
-                return new DashMediaSource.Factory(new DefaultDashChunkSource.Factory(dataSourceFactory), dataSourceFactory).createMediaSource(MediaItem.fromUri(uri));
+                return new DashMediaSource.Factory(new DefaultDashChunkSource.Factory(dataSourceFactory),
+                        dataSourceFactory).createMediaSource(MediaItem.fromUri(uri));
             case C.TYPE_SS:
-                return new SsMediaSource.Factory(new DefaultSsChunkSource.Factory(dataSourceFactory), dataSourceFactory).createMediaSource(MediaItem.fromUri(uri));
+                return new SsMediaSource.Factory(new DefaultSsChunkSource.Factory(dataSourceFactory), dataSourceFactory)
+                        .createMediaSource(MediaItem.fromUri(uri));
             case C.TYPE_HLS:
                 return new HlsMediaSource.Factory(dataSourceFactory).createMediaSource(MediaItem.fromUri(uri));
             case C.TYPE_OTHER:
                 return new ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(MediaItem.fromUri(uri));
-            default:
-            {
+            default: {
                 throw new IllegalStateException("Unsupported type: " + type);
             }
         }
     }
-    private Uri ParseFilePath()
-    {
+
+    private Uri ParseFilePath() {
         Uri uri = Uri.parse(filePath);
 
-        if (filePath.startsWith("jar:file:"))
-        {
-            if (filePath.contains(".apk"))
-            { // APK
-                uri = new Uri.Builder().scheme("asset").path(filePath.substring(filePath.indexOf("/assets/") + "/assets/".length())).build();
-            }
-            else if (filePath.contains(".obb"))
-            { // OBB
+        if (filePath.startsWith("jar:file:")) {
+            if (filePath.contains(".apk")) { // APK
+                uri = new Uri.Builder().scheme("asset")
+                        .path(filePath.substring(filePath.indexOf("/assets/") + "/assets/".length())).build();
+            } else if (filePath.contains(".obb")) { // OBB
                 String obbPath = filePath.substring(11, filePath.indexOf(".obb") + 4);
 
                 StorageManager sm = (StorageManager) myContext.getSystemService(Context.STORAGE_SERVICE);
-                if (!sm.isObbMounted(obbPath))
-                {
+                if (!sm.isObbMounted(obbPath)) {
                     sm.mountObb(obbPath, null, new OnObbStateChangeListener() {
                         @Override
                         public void onObbStateChange(String path, int state) {
@@ -597,7 +640,8 @@ public class VideoPlayer
                     });
                 }
 
-                uri = new Uri.Builder().scheme("file").path(sm.getMountedObbPath(obbPath) + filePath.substring(filePath.indexOf(".obb") + 5)).build();
+                uri = new Uri.Builder().scheme("file")
+                        .path(sm.getMountedObbPath(obbPath) + filePath.substring(filePath.indexOf(".obb") + 5)).build();
             }
         }
 

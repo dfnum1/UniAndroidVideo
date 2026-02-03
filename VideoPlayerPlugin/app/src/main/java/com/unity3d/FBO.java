@@ -44,7 +44,7 @@ public class FBO {
 
     public void FBOBegin() {
 
-        GLES30.glGetIntegerv(GLES30.GL_FRAMEBUFFER_BINDING, mOldFBOArray, 0);
+        GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, mOldFBOArray, 0);
 
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFBOID);
 

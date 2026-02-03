@@ -1,9 +1,43 @@
 using GameApp.UIComponent;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class TestUIVideo : MonoBehaviour
 {
-    public UIVideo uiVideo;
+    int m_nTest = 0;
+    public UIVideo uiVideo1;
+    public UIVideo uiVideo2;
+    public Text videoName1;
+    public Text videoName2;
+    static string[] videos = new string[] {
+        "CH01_0001_ZhuJiao.mp4",
+        "CH01_0002_ZhuJiao.mp4",
+        "CH01_0004_SaiDi.mp4",
+        "CH01_0004_ZhuJiao.mp4",
+        "CH01_0006_ZhuJiao.mp4",
+        "CH01_0007_SaiLinNa.mp4",
+        "CH01_0009_SaiDi.mp4",
+        "CH01_0010_SiDiEr.mp4",
+        "CH01_0012_SaiDi.mp4",
+        "CH01_0012_ZhuJiao.mp4",
+        "CH01_0015_YiTaiLingMiao.mp4",
+        "CH01_0018_SiDiEr.mp4",
+        "CH01_0025_AnYingTuanMan.mp4",
+        "CH01_0028_AnYingTuanMan.mp4",
+        "CH01_0031_QiYi.mp4",
+        "CH01_0032_AnYingTuanBoss.mp4",
+        "CH01_0050_QiYi.mp4",
+        "CH01_0051_LiLa.mp4",
+        "CH01_0052_LiLa.mp4",
+        "CH01_0053_Niya.mp4",
+        "CH01_0054_Niya.mp4",
+        "Fg_Dremio_Idle.mp4",
+        "Fg_Dremio_Sleep.mp4",
+        "Fg_Dremio_Wakeup.mp4",
+        "micb4n2e14578oly.mp4",
+        "pptpart01.mp4",
+        "EmergencyUI_Demo.mp4"
+        };
     // Start is called before the first frame update
     void Start()
     {
@@ -18,20 +52,26 @@ public class TestUIVideo : MonoBehaviour
     public void TestAVProFromAB(int id)
     {
         Debug.LogFormat("[TestUIVideo] ab begin");
-        uiVideo.PlayWithVideoName("ByteVideo"+id, true);
+        uiVideo1.PlayWithVideoName("ByteVideo"+id, true);
         Debug.LogFormat("[TestUIVideo] ab end");
     }
-    public void TestAVProFromStream(int id)
+    public void TestAVProFromStream()
     {
         Debug.LogFormat("[TestUIVideo] stream begin");
-        if (id == 1)
+
+        int index = m_nTest % videos.Length;
+        if (uiVideo1) uiVideo1.Stop();
+        if (uiVideo2) uiVideo2.Stop();
+        if (m_nTest %2==0)
         {
-            uiVideo.Play("Video/pptpart01.mp4", false, true);
+            videoName1.text = videos[index];
+            uiVideo1.Play(videos[index], false, true);
         }
         else
         {
-            uiVideo.Play("Video/output.mp4", false, true);
-        } 
-        Debug.LogFormat("[TestUIVideo] stream end");
+            uiVideo2.Play(videos[index], false, true);
+            videoName2.text = videos[index];
+        }
+        m_nTest++;
     }
 }

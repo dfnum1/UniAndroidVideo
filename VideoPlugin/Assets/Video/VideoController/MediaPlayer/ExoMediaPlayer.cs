@@ -865,6 +865,7 @@ namespace GameApp.Media
                     newHeight = m_Video.Call<int>("GetHeight");
                     if (newWidth != m_Width || newHeight != m_Height)
                     {
+                        if (m_Texture != null) UnityEngine.Object.Destroy(m_Texture);
                         m_Texture = null;
                         m_TextureHandle = 0;
                     }
