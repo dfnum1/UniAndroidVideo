@@ -382,10 +382,6 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                         Log.d(TAG, "UpdateSurfaceTexture: OpenGL error, recreating surface");
                         int width = GetWidth();
                         int height = GetHeight();
-                        if (width <= 0 || height <= 0) {
-                            width = 720;
-                            height = 720;
-                        }
                         CreateExoSurface(width, height);
                     }
                 }
@@ -441,9 +437,8 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
             int width = GetWidth();
             int height = GetHeight();
             if (width <= 0 || height <= 0) {
-                width = 720;
-                height = 720;
                 Log.d(TAG, "RenderScene: Using default size " + width + "x" + height);
+                return;
             }
 
             // 确保OpenGL资源正确初始化
@@ -827,49 +822,72 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
 
     private void DestroySurface() {
         try {
-            Log.d(TAG, "DestroySurface: Starting");
+         //   Log.d(TAG, "DestroySurface: Starting");
 
-            // 1. 首先释放Surface，它依赖于SurfaceTexture
-            if (mySurface != null) {
-                Log.d(TAG, "DestroySurface: Releasing mySurface");
-                try {
-                    mySurface.release();
-                } catch (Exception e) {
-                    Log.e(TAG, "DestroySurface: Error releasing mySurface: " + e.getMessage());
-                }
-                mySurface = null;
-            }
+            final Surface oldSurface = mySurface;
+            final SurfaceTexture oldSurfaceTexture = surfaceTexture;
+            final ImageReader oldImageReader = mVideImageReader;
+            final VideoPlayer player = videoPlayer;
 
-            // 2. 释放ImageReader相关资源
-            if (m_UseImageReader) {
-                if (mVideImageReader != null) {
-                    Log.d(TAG, "DestroySurface: Closing mVideImageReader");
-                    try {
-                        mVideImageReader.close();
-                    } catch (Exception e) {
-                        Log.e(TAG, "DestroySurface: Error closing mVideImageReader: " + e.getMessage());
-                    }
-                    mVideImageReader = null;
-                }
-            } else {
-                // 3. 释放SurfaceTexture相关资源
-                if (surfaceTexture != null) {
-                    Log.d(TAG, "DestroySurface: Releasing surfaceTexture");
-                    try {
-                        surfaceTexture.setOnFrameAvailableListener(null);
-                        surfaceTexture.release();
-                    } catch (Exception e) {
-                        Log.e(TAG, "DestroySurface: Error releasing surfaceTexture: " + e.getMessage());
-                    }
-                    surfaceTexture = null;
-                }
-            }
+            // Set fields to null immediately
+            mySurface = null;
+            surfaceTexture = null;
+            mVideImageReader = null;
 
-            // 4. 重置帧计数器
+            // Reset frame counters
             m_iNumberFramesAvailable = 0;
             mNewFrameAvailable = false;
 
-            Log.d(TAG, "DestroySurface: Completed");
+            getHandler().post(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        // 1. Detach from player first to prevent use of released surface
+                        if (player != null) {
+                            try {
+                                player.AttackSurface(null);
+                            } catch (Exception e) {
+                                Log.e(TAG, "DestroySurface: Error detaching surface: " + e.getMessage());
+                            }
+                        }
+
+                        // 2. Release Surface
+                        if (oldSurface != null) {
+                           // Log.d(TAG, "DestroySurface: Releasing mySurface");
+                            try {
+                                oldSurface.release();
+                            } catch (Exception e) {
+                                Log.e(TAG, "DestroySurface: Error releasing mySurface: " + e.getMessage());
+                            }
+                        }
+
+                        // 3. Release ImageReader
+                        if (oldImageReader != null) {
+                           // Log.d(TAG, "DestroySurface: Closing mVideImageReader");
+                            try {
+                                oldImageReader.close();
+                            } catch (Exception e) {
+                                Log.e(TAG, "DestroySurface: Error closing mVideImageReader: " + e.getMessage());
+                            }
+                        }
+
+                        // 4. Release SurfaceTexture
+                        if (oldSurfaceTexture != null) {
+                        //    Log.d(TAG, "DestroySurface: Releasing surfaceTexture");
+                            try {
+                                oldSurfaceTexture.setOnFrameAvailableListener(null);
+                                oldSurfaceTexture.release();
+                            } catch (Exception e) {
+                                Log.e(TAG, "DestroySurface: Error releasing surfaceTexture: " + e.getMessage());
+                            }
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "DestroySurface Runnable Exception: " + e.getMessage());
+                    }
+                }
+            });
+
+          //  Log.d(TAG, "DestroySurface: Cleanup scheduled");
         } catch (Exception ex) {
             Log.e(TAG, "DestroySurface Exception: " + ex.getMessage());
             ex.printStackTrace();
