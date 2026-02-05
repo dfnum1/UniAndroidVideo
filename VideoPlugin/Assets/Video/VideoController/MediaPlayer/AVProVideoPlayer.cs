@@ -146,6 +146,7 @@ namespace GameApp.Media
             m_VideoOpened = false;
             m_bReadyStarted = false;
             m_bPrepared = false;
+            m_Loop = false;
 
             m_DurationMs = 0.0f;
 
@@ -182,7 +183,7 @@ namespace GameApp.Media
                     if (m_events != null) m_events.Invoke(this, MediaPlayerEvent.EventType.FirstFrameReady, (ErrorCode)eventType);
                     break;
                 case RenderHeads.Media.AVProVideo.MediaPlayerEvent.EventType.FinishedPlaying:
-                    if (!player.Loop)
+                    if (!m_Loop)
                     {
                         m_bPrepared = false;
                         m_bReadyStarted = false;
@@ -209,6 +210,7 @@ namespace GameApp.Media
         //-------------------------------------------------
         public void SetLooping(bool bLooping)
         {
+            m_Loop = bLooping;
             if (m_VideoPlayer)
             {
                 m_VideoPlayer.Loop = bLooping;
