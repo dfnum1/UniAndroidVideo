@@ -46,10 +46,12 @@ import com.google.android.exoplayer2.device.DeviceInfo;
 import com.google.android.exoplayer2.video.VideoSize;
 import com.google.android.exoplayer2.source.TrackGroupArray;
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
+import com.google.android.exoplayer2.metadata.Metadata;
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.List;
 
 public class VideoPlayer {
     private final String TAG = "ExoVideoPlayer";
@@ -374,6 +376,11 @@ public class VideoPlayer {
 
         @Override
         public void onRenderedFirstFrame() {
+        }
+
+        @Override
+        public void onStaticMetadataChanged(List<Metadata> metadata) {
+            // 空实现即可
         }
     }
 

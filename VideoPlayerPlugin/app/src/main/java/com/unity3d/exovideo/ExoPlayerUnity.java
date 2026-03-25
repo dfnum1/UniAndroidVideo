@@ -370,7 +370,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                     RenderScene(mSurfaceTextureMat, this.m_TextureHandle, iNumFramesAvailable);
                     m_nFrameCount++;
                     if (m_nFrameCount >= 1000000)
-                        m_nFrameCount = 1;
+                        m_nFrameCount = 2;
 
                     // Log.d(TAG, "UpdateSurfaceTexture: Completed, frame count=" + m_nFrameCount);
                 } catch (Exception e) {
@@ -410,7 +410,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                         RenderImageNoGL(image);
                         m_nFrameCount++;
                         if (m_nFrameCount >= 1000000)
-                            m_nFrameCount = 1;
+                            m_nFrameCount = 2;
                     } finally {
                         image.close();
                     }
