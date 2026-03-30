@@ -1,4 +1,5 @@
 using GameApp.UIComponent;
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,6 +10,12 @@ public class TestUIVideo : MonoBehaviour
     public UIVideo uiVideo2;
     public Text videoName1;
     public Text videoName2;
+    static string[] ranoms_videos = new string[]
+    {
+        "Fg_Dremio_Idle.mp4",
+        "Fg_Dremio_Sleep.mp4",
+        "Fg_Dremio_Wakeup.mp4"
+    };
     static string[] videos = new string[] {
         "CH01_0001_ZhuJiao.mp4",
         "CH01_0002_ZhuJiao.mp4",
@@ -73,5 +80,18 @@ public class TestUIVideo : MonoBehaviour
             videoName2.text = videos[index];
         }
         m_nTest++;
+    }
+
+    public void Change()
+    {
+        videoName1.text = GetRandomVideo();
+        uiVideo1.Play(videoName1.text, false, true);
+        uiVideo1.SetColorCutoff(0.217f);
+    }
+
+    string GetRandomVideo()
+    {
+        int index = UnityEngine.Random.Range(0, ranoms_videos.Length);
+        return ranoms_videos[index];
     }
 }
