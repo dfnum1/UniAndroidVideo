@@ -1,8 +1,8 @@
 /********************************************************************
-生成日期:	1:11:2020 13:16
-类    名: 	AndroidMediaPlayer
+生成日期:	10:23:2025 13:16
+类    名: 	ExoMediaPlayer
 作    者:	HappLI
-描    述:	window 系统视频播放
+描    述:	Android 系统视频播放
 *********************************************************************/
 #if UNITY_ANDROID && !UNITY_EDITOR
 using System.Collections;
@@ -83,6 +83,7 @@ namespace GameApp.Media
 		protected int 						m_iPlayerIndex		= -1;
 
         // State
+        private bool m_bPlaying = false;
         private bool m_bVideoLoop = true;
         private bool m_VideoOpened = false;
         private bool m_AutoStartTriggered = false;
@@ -291,6 +292,7 @@ namespace GameApp.Media
             if (m_Video == null)
                 Init(useFastOesPath, showPosterFrame);
 
+            m_bPlaying = false;
             m_VideoOpened = true;
             m_AutoStartTriggered = false;
             m_EventFired_MetaDataReady = false;
@@ -336,7 +338,7 @@ namespace GameApp.Media
                 }
             }
             m_VideoOpened = false;
-
+            m_bPlaying = false;
 
             if (m_Texture != null)
             {
@@ -577,7 +579,12 @@ namespace GameApp.Media
 			bool result = false;
 			if (m_Video != null)
 			{
-				result = m_Video.Call<bool>("GetIsPlaying");
+                bool isPlaying = m_Video.Call<bool>("GetIsPlaying");
+                if(isPlaying && m_bVideoLoop)
+                {
+                    m_bPlaying = true;
+                }
+                result = isPlaying || m_bPlaying;
 			}
 			return result;
 		}
@@ -865,7 +872,7 @@ namespace GameApp.Media
                     newHeight = m_Video.Call<int>("GetHeight");
                     if (newWidth != m_Width || newHeight != m_Height)
                     {
-                        if (m_Texture != null) UnityEngine.Object.Destroy(m_Texture);
+                    	if (m_Texture != null) UnityEngine.Object.Destroy(m_Texture);
                         m_Texture = null;
                         m_TextureHandle = 0;
                     }
@@ -1135,8 +1142,6 @@ namespace GameApp.Media
 
             if (m_Video != null)
 			{
-			//	m_Video.Call("SetDeinitialiseFlagged");
-
 				m_Video.Dispose();
 				m_Video = null;
 			}

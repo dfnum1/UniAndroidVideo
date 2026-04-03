@@ -193,6 +193,7 @@ MonoBehaviour:
   erasureColor: {r: 0.054901965, g: 0.72156864, b: 0.04705883, a: 0}
   delayPlay: 0
   defaultShow: {fileID: 0}
+  disableDontStop: 0
   useCustomParams: 0
   colorCutoff: 0
   colorFeathering: 0
@@ -357,6 +358,7 @@ MonoBehaviour:
   erasureColor: {r: 0, g: 1, b: 0, a: 0}
   delayPlay: 0
   defaultShow: {fileID: 0}
+  disableDontStop: 0
   useCustomParams: 0
   colorCutoff: 0
   colorFeathering: 0
@@ -521,6 +523,7 @@ MonoBehaviour:
   erasureColor: {r: 0.054901965, g: 0.72156864, b: 0.04705883, a: 0}
   delayPlay: 0
   defaultShow: {fileID: 0}
+  disableDontStop: 0
   useCustomParams: 0
   colorCutoff: 0
   colorFeathering: 0
@@ -1438,6 +1441,7 @@ MonoBehaviour:
   erasureColor: {r: 0.054901965, g: 0.72156864, b: 0.04705883, a: 0}
   delayPlay: 0
   defaultShow: {fileID: 0}
+  disableDontStop: 0
   useCustomParams: 0
   colorCutoff: 0
   colorFeathering: 0
@@ -1523,6 +1527,7 @@ MonoBehaviour:
   erasureColor: {r: 0.054901965, g: 0.72156864, b: 0.04705883, a: 0}
   delayPlay: 0
   defaultShow: {fileID: 0}
+  disableDontStop: 0
   useCustomParams: 0
   colorCutoff: 0
   colorFeathering: 0
@@ -1809,6 +1814,7 @@ MonoBehaviour:
   erasureColor: {r: 0, g: 1, b: 0, a: 0}
   delayPlay: 0
   defaultShow: {fileID: 0}
+  disableDontStop: 0
   useCustomParams: 0
   colorCutoff: 0
   colorFeathering: 0

@@ -8,8 +8,9 @@ Shader "UI/UI_Video"
         _MaskFeathering("抠色羽化", Range(0, 1)) = 1
         _Sharpening("锐度", Range(0, 1)) = 0.5
 		
-	//	_Despill("DespillStrength", Range(0, 1)) = 1
-    //    _DespillLuminanceAdd("DespillLuminanceAdd", Range(0, 1)) = 0.2
+		_Despill("滤镜强度", Range(0, 1)) = 0
+        _DespillLuminanceAdd("滤镜亮度增强", Range(0, 1)) = 0
+        _EdgeSoft("边缘", Range(0,1)) = 1
 
         _MirrorX ("Mirror X", Range(0, 1)) = 0
         _MirrorY ("Mirror Y", Range(0, 1)) = 0
@@ -24,7 +25,7 @@ Shader "UI/UI_Video"
 		[Toggle(USE_GRAY)] _UseGray("Use Gray", Float) = 0
         [Toggle(ERASURE_COLOR)] _UseErasure("Use Erasure", Float) = 1
 		[Toggle(UNITY_UI_ALPHACLIP)] _UseUIAlphaClip("Use Alpha Clip", Float) = 0     
-		[Toggle(USE_AVPRO)] _UseAVPro("Use AVPro", Float) = 0
+	//	[Toggle(USE_AVPRO)] _UseAVPro("Use AVPro", Float) = 0
     }
     SubShader
     {
@@ -88,11 +89,12 @@ Shader "UI/UI_Video"
             float _ColorFeathering;
             float _MaskFeathering;
             float _Sharpening;
-		//	float _Despill;
-         //   float _DespillLuminanceAdd;
+			float _Despill;
+            float _DespillLuminanceAdd;
             float _MirrorX;
             float _MirrorY;
 			float4 _ClipRect;
+            float _EdgeSoft;
 			CBUFFER_END
 
             
@@ -169,34 +171,37 @@ Shader "UI/UI_Video"
                 float2 pixelHeight = float2(0, 1.0 / _MainTex_TexelSize.w);
 
                 half3 eraseColor =LinearToGammaSpace(i.color.rgb);
+                float factor = 1.0; // 斜对角采样权重
+                float factor1 = 1.0 / 9.0; // 3x3均值模糊
 
-                 float mask = maskedTex2D(col,eraseColor, i.uv);
+                float c = maskedTex2D(col, eraseColor, i.uv);
+                float r = maskedTex2D(tex2D(_MainTex, mirroredUV + pixelWidth), eraseColor, i.uv + pixelWidth);
+                float l = maskedTex2D(tex2D(_MainTex, mirroredUV - pixelWidth), eraseColor, i.uv - pixelWidth);
+                float d = maskedTex2D(tex2D(_MainTex, mirroredUV + pixelHeight), eraseColor, i.uv + pixelHeight);
+                float u = maskedTex2D(tex2D(_MainTex, mirroredUV - pixelHeight), eraseColor, i.uv - pixelHeight);
+                float rd = maskedTex2D(tex2D(_MainTex, mirroredUV + pixelWidth + pixelHeight), eraseColor, i.uv + pixelWidth + pixelHeight) * factor;
+                float dl = maskedTex2D(tex2D(_MainTex, mirroredUV - pixelWidth + pixelHeight), eraseColor, i.uv - pixelWidth + pixelHeight) * factor;
+                float lu = maskedTex2D(tex2D(_MainTex, mirroredUV - pixelHeight - pixelWidth), eraseColor, i.uv - pixelHeight - pixelWidth) * factor;
+                float ur = maskedTex2D(tex2D(_MainTex, mirroredUV + pixelWidth - pixelHeight), eraseColor, i.uv + pixelWidth - pixelHeight) * factor;
 
-                 float factor =LinearToGammaSpace(.707);
-                 float factor1 =LinearToGammaSpace(0.12774655);
+                // 3x3均值模糊
+                float blurAlpha = (c + r + l + d + u + rd + dl + lu + ur) * factor1;
 
-                float c = mask;
-                float r = maskedTex2D(col,eraseColor, i.uv + pixelWidth);
-                float l = maskedTex2D(col,eraseColor, i.uv - pixelWidth);
-                float d = maskedTex2D(col,eraseColor, i.uv + pixelHeight); 
-                float u = maskedTex2D(col,eraseColor, i.uv - pixelHeight);
-                float rd = maskedTex2D(col,eraseColor, i.uv + pixelWidth + pixelHeight) * factor;
-                float dl = maskedTex2D(col,eraseColor, i.uv - pixelWidth + pixelHeight) * factor;
-                float lu = maskedTex2D(col,eraseColor, i.uv - pixelHeight - pixelWidth) * factor;
-                float ur = maskedTex2D(col,eraseColor, i.uv + pixelWidth - pixelHeight) * factor;
-                float blurContribution = (r + l + d + u + rd + dl + lu + ur + c) * factor1;
-                float alpha = smoothstep(_Sharpening, 1, lerp(c, blurContribution, _MaskFeathering));
+                // 用_EdgeSoft控制插值强度
+                float edgeSoft = lerp(c, blurAlpha, _EdgeSoft);
 
+                // 你可以直接用edgeSoft作为alpha，或者再做一次smoothstep
+                float alpha = smoothstep(_Sharpening, 1, lerp(edgeSoft, blurAlpha, _MaskFeathering));
                 // 应用透明度
-			//	fixed4 mainColor = col;
-                col.a = alpha * i.color.a;
+				fixed4 mainColor = col;
+                col = mainColor*alpha;
 				
 				// Despill
-              //  float v = (2*col.b+col.r)/4;
-              //  if(col.g > v) col.g = lerp(col.g, v, _Despill);
-              //  float4 dif = (mainColor - col);
-              //  float desaturatedDif = rgb2y(dif.xyz);
-              //  col += lerp(0, desaturatedDif, _DespillLuminanceAdd);
+                float v = (2*col.b+col.r)/4;
+                if(col.g > v) col.g = lerp(col.g, v, _Despill);
+                float4 dif = (mainColor - col);
+                float desaturatedDif = rgb2y(dif.xyz);
+                col += lerp(0, desaturatedDif, _DespillLuminanceAdd);
              #endif
 
 #ifdef UNITY_UI_CLIP_RECT

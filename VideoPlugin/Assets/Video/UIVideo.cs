@@ -1,4 +1,6 @@
 ﻿using GameApp.Media;
+using System;
+
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -20,6 +22,7 @@ namespace GameApp.UIComponent
         public Color                erasureColor = Color.green;  
         public float                delayPlay = 0.0f;
         public Graphic              defaultShow = null;
+        public bool                 disableDontStop = false;
         [SerializeField] private bool               useCustomParams = false;
         [SerializeField][Range(0,1)]private float   colorCutoff;
         [SerializeField][Range(0, 1)]private float  colorFeathering;
@@ -61,6 +64,11 @@ namespace GameApp.UIComponent
         //------------------------------------------------------
         protected override void OnDisable()
         {
+            if (disableDontStop)
+            {
+                base.OnDisable();
+                return;
+            }
             Stop();
             DestroyNewMaterial();
             base.OnDisable();
@@ -68,6 +76,11 @@ namespace GameApp.UIComponent
         //------------------------------------------------------
         protected override void OnEnable()
         {
+            if (disableDontStop)
+            {
+                base.OnEnable();
+                return;
+            }
             StartVideo();
             base.OnEnable();
         }
@@ -150,6 +163,18 @@ namespace GameApp.UIComponent
             }
             erasureColor.a = 0.0f;
             this.color = erasureColor;
+        }
+        //------------------------------------------------------
+        public void Pause()
+        {
+            if (m_VideoPlayer != null)
+                m_VideoPlayer.Pause();
+        }
+        //------------------------------------------------------
+        public void Resume()
+        {
+            if (m_VideoPlayer != null)
+                m_VideoPlayer.Play();
         }
         //------------------------------------------------------
         public bool IsPlaying()
@@ -301,6 +326,21 @@ namespace GameApp.UIComponent
             if (string.IsNullOrEmpty(this.m_strUrl)) return false;
             if (m_VideoPlayer != null)
             {
+                if(m_LastVideoPlayer!=null )
+                {
+                    if (m_LastVideoPlayer.GetVideoPath().CompareTo(this.m_strUrl) == 0 &&
+                        m_LastVideoPlayer.GetVideoPath().CompareTo(m_VideoPlayer.GetVideoPath())!=0)
+                    {
+                        string shaderMarc = VideoController.GetMaterialDefines();
+                        if (material && !string.IsNullOrEmpty(shaderMarc))
+                            material.EnableKeyword(shaderMarc);
+
+                        var temp = m_VideoPlayer;
+                        m_VideoPlayer = m_LastVideoPlayer;
+                        m_LastVideoPlayer = temp;
+                        return true;
+                    }
+                }
                 if (m_VideoPlayer.GetVideoPath().CompareTo(this.m_strUrl) == 0)
                 {
                     string shaderMarc = VideoController.GetMaterialDefines();
@@ -311,10 +351,12 @@ namespace GameApp.UIComponent
                 BackupLastVideo();
            //     VideoController.StopVideo(m_VideoPlayer);
             }
-            if(m_LastVideoPlayer == null || m_LastVideoPlayer.GetTextureFrameCount()<=1)
+
+            m_fAlphaTime = ALPHA_TIME;
+            m_fDelayPlay = -1.0f;
+            if (m_LastVideoPlayer == null || m_LastVideoPlayer.GetTextureFrameCount()<=1)
             {
-                m_fAlphaTime = ALPHA_TIME;
-                m_fDelayPlay = -1.0f;
+                //! TODO...
             }
 
             if (m_VideoPlayer == null)
@@ -374,7 +416,7 @@ namespace GameApp.UIComponent
                     DelayPlay();
                 }
             }
-            if(m_VideoPlayer != null && m_VideoPlayer.GetTextureFrameCount()>1)
+            if(m_VideoPlayer != null && m_VideoPlayer.IsPlaying() && m_VideoPlayer.GetTextureFrameCount()>1 && m_VideoPlayer.GetTexture()!=null)
             {
                 if (m_LastVideoPlayer != null)
                 {
@@ -398,15 +440,18 @@ namespace GameApp.UIComponent
             this.texture = player.GetTexture();
             if (this.texture == null || player.GetTextureFrameCount()<=1)
             {
-                erasureColor.a = 0;
-                this.color = erasureColor;
+                if(player != m_LastVideoPlayer)
+                {
+                    erasureColor.a = 0;
+                    this.color = erasureColor;
+                }
             }
             else
             {
                 if (m_fAlphaTime>0)
                 {
                     m_fAlphaTime -= Time.unscaledDeltaTime;
-                    float factor = Mathf.Clamp01((1 - m_fAlphaTime / 0.25f));
+                    float factor = Mathf.Clamp01((1 - m_fAlphaTime / ALPHA_TIME));
                     if (defaultShow)
                     {
                         var color = defaultShow.color;
@@ -418,6 +463,10 @@ namespace GameApp.UIComponent
                     }
                     erasureColor.a = Mathf.Lerp(erasureColor.a, player.GetAlhpa(true) * alphaFactor, factor);
                     this.color = erasureColor;
+                }
+                else if(erasureColor.a <=0)
+                {
+                    m_fAlphaTime = 0.1f;
                 }
             }
         }
@@ -437,6 +486,7 @@ namespace GameApp.UIComponent
             serializedObject.Update();
             UIVideo video = target as UIVideo;
             EditorGUI.BeginChangeCheck();
+            video.disableDontStop = UnityEditor.EditorGUILayout.Toggle("隐藏时不停止播放", video.disableDontStop);
             video.defaultShow = (Graphic)UnityEditor.EditorGUILayout.ObjectField(new GUIContent("缺省显示", "当视频播放失败，或者正在加载时，显示"), video.defaultShow, typeof(Graphic), true);
             video.bPersistentPath = UnityEditor.EditorGUILayout.Toggle("缓存模式", video.bPersistentPath);
             EditorGUILayout.BeginHorizontal();

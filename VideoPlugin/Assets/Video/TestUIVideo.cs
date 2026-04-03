@@ -12,9 +12,8 @@ public class TestUIVideo : MonoBehaviour
     public Text videoName2;
     static string[] ranoms_videos = new string[]
     {
-        "Fg_Dremio_Idle.mp4",
-        "Fg_Dremio_Sleep.mp4",
-        "Fg_Dremio_Wakeup.mp4"
+        "DragonQuest_Video_Clip_01.mp4",
+        "DragonQuest_Video_Clip_02.mp4"
     };
     static string[] videos = new string[] {
         "CH01_0001_ZhuJiao.mp4",

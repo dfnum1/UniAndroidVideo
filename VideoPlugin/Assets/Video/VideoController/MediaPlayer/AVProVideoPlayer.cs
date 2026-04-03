@@ -54,7 +54,8 @@ namespace GameApp.Media
         }
 
         private RenderHeads.Media.AVProVideo.MediaPlayer m_VideoPlayer = null;
-        AnimationCurve m_AlphaCurve;        
+        AnimationCurve m_AlphaCurve;
+        private bool m_bPlaying = false;
         //------------------------------------------------------
         public void SetCurveAlpha(AnimationCurve alpha)
         {
@@ -143,6 +144,8 @@ namespace GameApp.Media
                     m_events.Invoke(this, MediaPlayerEvent.EventType.Closing, ErrorCode.None);
                 }
             }
+
+            m_bPlaying = false;
             m_VideoOpened = false;
             m_bReadyStarted = false;
             m_bPrepared = false;
@@ -169,18 +172,22 @@ namespace GameApp.Media
                     m_bPrepared = true;
                     m_DurationMs = (float)(player.Info.GetDuration() * 1000);
                     if (m_events != null) m_events.Invoke(this, MediaPlayerEvent.EventType.MetaDataReady, (ErrorCode)eventType);
+                    SetLooping(m_Loop);
                     break;
                 case RenderHeads.Media.AVProVideo.MediaPlayerEvent.EventType.ReadyToPlay:
                     m_bReadyStarted = true;
                     if (m_events != null) m_events.Invoke(this, MediaPlayerEvent.EventType.ReadyToPlay, (ErrorCode)eventType);
+                    SetLooping(m_Loop);
                     break;
                 case RenderHeads.Media.AVProVideo.MediaPlayerEvent.EventType.Started:
                     m_bReadyStarted = true;
                     m_DurationMs = (float)(player.Info.GetDuration() * 1000);
                     if (m_events != null) m_events.Invoke(this, MediaPlayerEvent.EventType.Started, (ErrorCode)eventType);
+                    SetLooping(m_Loop);
                     break;
                 case RenderHeads.Media.AVProVideo.MediaPlayerEvent.EventType.FirstFrameReady:
                     if (m_events != null) m_events.Invoke(this, MediaPlayerEvent.EventType.FirstFrameReady, (ErrorCode)eventType);
+                    SetLooping(m_Loop);
                     break;
                 case RenderHeads.Media.AVProVideo.MediaPlayerEvent.EventType.FinishedPlaying:
                     if (!m_Loop)
@@ -370,7 +377,11 @@ namespace GameApp.Media
             bool result = false;
             if (m_VideoPlayer && m_VideoPlayer.Control!=null)
             {
-                result = m_VideoPlayer.Control.IsPlaying();
+                if(m_VideoPlayer.Control.IsPlaying() && m_Loop)
+                {
+                    m_bPlaying = true;
+                }
+                result = m_VideoPlayer.Control.IsPlaying() || m_bPlaying;
             }
             return result;
         }
