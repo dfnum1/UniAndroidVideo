@@ -13,6 +13,7 @@ Material:
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
   - ERASURE_COLOR
+  - USE_AVPRO
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -68,9 +69,12 @@ Material:
     - _ColorMask: 15
     - _Cutoff: 0.5
     - _Desaturation: 0
+    - _Despill: 0
+    - _DespillLuminanceAdd: 0
     - _DetailNormalMapScale: 1
     - _DstBlend: 0
     - _EdgeFactor: 0.88
+    - _EdgeSoft: 1
     - _GlossMapScale: 1
     - _Glossiness: 0.5
     - _GlossyReflections: 1

@@ -416,7 +416,7 @@ namespace GameApp.UIComponent
                     DelayPlay();
                 }
             }
-            if(m_VideoPlayer != null && m_VideoPlayer.IsPlaying() && m_VideoPlayer.GetTextureFrameCount()>1 && m_VideoPlayer.GetTexture()!=null)
+            if(m_VideoPlayer != null && m_VideoPlayer.IsPlaying() && m_VideoPlayer.GetTextureFrameCount()>2 && m_VideoPlayer.GetTexture()!=null)
             {
                 if (m_LastVideoPlayer != null)
                 {
@@ -438,13 +438,10 @@ namespace GameApp.UIComponent
         public void SyncTexture(IMediaPlayer player, float alphaFactor = 1)
         {
             this.texture = player.GetTexture();
-            if (this.texture == null || player.GetTextureFrameCount()<=1)
+            if (this.texture == null || player.GetTextureFrameCount() <= 2)
             {
-                if(player != m_LastVideoPlayer)
-                {
-                    erasureColor.a = 0;
-                    this.color = erasureColor;
-                }
+                erasureColor.a = 0;
+                this.color = erasureColor;
             }
             else
             {
