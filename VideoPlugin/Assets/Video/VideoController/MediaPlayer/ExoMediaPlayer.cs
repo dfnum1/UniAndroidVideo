@@ -918,17 +918,13 @@ namespace GameApp.Media
 
               //  Debug.Log(m_Width + "x" + m_Height + " TexHandle: " + textureHandle + " TexPtr: " + (m_Texture != null ? m_Texture.GetNativeTexturePtr().ToString() : "null"));
 
+                // 注意：不再每帧调用 GetNativeTexturePtr()，该API会强制主线程与渲染线程同步导致严重阻塞
+                // 改为通过 textureHandle 变化来判断是否需要更新外部纹理
+                if (m_Texture != null && textureHandle > 0 && textureHandle != m_TextureHandle)
                 {
-                    if (m_Texture != null && textureHandle > 0 && m_Texture.GetNativeTexturePtr() == System.IntPtr.Zero)
-                    {
-						//Debug.Log("RECREATING");
-						m_Texture.UpdateExternalTexture(new System.IntPtr(textureHandle));
-
-					}
-
-	//				_textureQuality = QualitySettings.masterTextureLimit;
-				}
-                //#endif
+                    m_Texture.UpdateExternalTexture(new System.IntPtr(textureHandle));
+                    m_TextureHandle = textureHandle;
+                }
 
                 if ( m_DurationMs == 0.0f )
 				{

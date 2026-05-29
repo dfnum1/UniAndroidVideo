@@ -45,7 +45,7 @@ namespace GameApp.Media
             m_pVideoRoot = new GameObject("VideoSystem");
             GameObject.DontDestroyOnLoad(m_pVideoRoot);
 #endif
-       //     m_pVideoRoot.hideFlags |= HideFlags.HideAndDontSave;
+            m_pVideoRoot.hideFlags |= HideFlags.HideAndDontSave;
             m_vVideos = new List<IMediaPlayer>(2);
         }
         //------------------------------------------------------
@@ -234,6 +234,43 @@ namespace GameApp.Media
             var playUrl = assetName;
             if (assetHelper.CheckAssetRes(assetName, out AssetDataInfo data))
             {
+#if UNITY_EDITOR
+                string md5 = GetFileMD5(data.assetName);
+                string cacheFile = GetAVProAssetSavePathWithMD5(assetName, md5);
+                if (File.Exists(cacheFile))
+                {
+                    return cacheFile;
+                }
+
+                string dir = System.IO.Path.GetDirectoryName(cacheFile);
+                if (!Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+
+                string[] files = Directory.GetFiles(dir, $"{assetName}*.mp4");
+                foreach (var file in files)
+                {
+                    try
+                    {
+                        File.Delete(file);
+                    }
+                    catch
+                    {
+                        // 忽略删除异常
+                    }
+                }
+
+                try
+                {
+                    File.Copy(data.assetName, cacheFile, true);
+                }
+                catch
+                {
+                    
+                }
+                return cacheFile;
+#endif
                 string abName = data.assetbundle;
                 string hash = assetFileModule.GetAssetbundleHash(abName);
                 Debug.LogFormat("[TestUIVideo] PlayWithVideoName:{0}, bunble:{1}, hash:{2}", assetName, abName, hash);
@@ -262,7 +299,8 @@ namespace GameApp.Media
                 DeleteExpiredAVProFile(assetName, hash);
             }
             Debug.LogFormat("[TestUIVideo] PrepareForPlayWithName, Url:{0}", playUrl);
-            return playUrl;*/
+            return playUrl;
+			*/
             return null;
         }
 
@@ -297,7 +335,6 @@ namespace GameApp.Media
             string targetDir = GetAVProPath();
             // 获取所有以指定前缀开头的文件
             string[] files = Directory.GetFiles(targetDir, $"{assetName}*");
-            string exceptFileName = string.Format("{0}_{1}.mp4", assetName, hash);
             if (files.Length <= 1)
             {
                 return;
@@ -306,7 +343,7 @@ namespace GameApp.Media
             // 批量删除文件
             foreach (string file in files)
             {
-                if (!file.Equals(exceptFileName))
+                if (!file.Contains(hash))
                 {
                     deleteFiles.Add(file);
                 }
@@ -318,7 +355,27 @@ namespace GameApp.Media
             deleteFiles.Clear();
 #endif
         }
+        
+#if UNITY_EDITOR
+        private static string GetFileMD5(string filePath)
+        {
+            using (var md5 = MD5.Create())
+            using (var stream = File.OpenRead(filePath))
+            {
+                var hash = md5.ComputeHash(stream);
+                StringBuilder sb = new StringBuilder();
+                foreach (var b in hash)
+                    sb.Append(b.ToString("x2"));
+                return sb.ToString();
+            }
+        }
+        // 生成带MD5的文件名
+        private static string GetAVProAssetSavePathWithMD5(string assetName, string md5)
+        {
+            string avproDir = GetAVProPath();
+            string mp4Path = string.Format("{0}/{1}[{2}].mp4", avproDir, assetName, md5);
+            return mp4Path;
+        }
+#endif
     }
-
-
 }

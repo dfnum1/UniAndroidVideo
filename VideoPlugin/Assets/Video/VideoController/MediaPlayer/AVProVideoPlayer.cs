@@ -366,7 +366,7 @@ namespace GameApp.Media
             if (m_VideoPlayer && m_VideoPlayer.Control!=null)
             {
                 result = m_VideoPlayer.Control.GetPlaybackRate();
-                if (result <= 0) result = 30;
+                if (result <= 0) result = 1;
 
             }
             return result;
