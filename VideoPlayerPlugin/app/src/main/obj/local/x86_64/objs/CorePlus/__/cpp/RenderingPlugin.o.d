@@ -55,7 +55,12 @@
   D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\map \
   D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\__tree \
   D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\__node_handle \
-  D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\optional
+  D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\optional \
+  D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\mutex \
+  D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\__mutex_base \
+  D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\system_error \
+  D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\__errc \
+  D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\cerrno
 
 D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\math.h:
 
@@ -170,3 +175,13 @@ D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\__tree:
 D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\__node_handle:
 
 D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\optional:
+
+D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\mutex:
+
+D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\__mutex_base:
+
+D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\system_error:
+
+D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\__errc:
+
+D:\work_tool\NDK23\build\\..\sources\cxx-stl\llvm-libc++\include\cerrno:

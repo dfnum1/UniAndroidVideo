@@ -67,6 +67,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     boolean mNewFrameAvailable = false;
     int m_iOpenGLVersion = 1;
     boolean m_bCanUseGLBindVertexArray = false;
+    volatile boolean m_bDestroyed = false;
 
     public static void OnRendererEvent(int eventID) {
         // Log.d(TAG, "OnRendererEventJava: " + eventID);
@@ -260,6 +261,8 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         getHandler().post(new Runnable() {
             @Override
             public void run() {
+                if (videoPlayer == null)
+                    return;
                 if (mySurface != null)
                     mySurface.release();
 
@@ -282,7 +285,9 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         getHandler().post(new Runnable() {
             @Override
             public void run() {
-                videoPlayer.AttackSurface(mySurface);
+                if (videoPlayer != null) {
+                    videoPlayer.AttackSurface(mySurface);
+                }
             }
         });
     }
@@ -298,6 +303,8 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         getHandler().post(new Runnable() {
             @Override
             public void run() {
+                if (videoPlayer == null)
+                    return;
                 // 对于ImageReader模式，mySurface已经在CreateExoSurface中设置
                 // 对于SurfaceTexture模式，重新创建Surface
                 if (!m_UseImageReader && surfaceTexture != null) {
@@ -315,7 +322,11 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     }
 
     public void Render() {
+        if (m_bDestroyed || videoPlayer == null)
+            return;
         synchronized (this) {
+            if (m_bDestroyed || videoPlayer == null)
+                return;
             // Log.d(TAG, "Render: Starting");
 
             // 确保使用有效的尺寸
@@ -670,6 +681,10 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     public void CreateExoSurface(int width, int height) {
         if (videoPlayer == null)
             return;
+        if (width <= 0 || height <= 0) {
+            Log.w(TAG, "CreateExoSurface: Invalid dimensions " + width + "x" + height + ", skipping");
+            return;
+        }
         try {
             // Log.d(TAG, "CreateExoSurface: Starting with " + width + "x" + height);
 
@@ -746,7 +761,8 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         getHandler().post(new Runnable() {
             @Override
             public void run() {
-                videoPlayer.Play();
+                if (videoPlayer != null)
+                    videoPlayer.Play();
             }
         });
     }
@@ -758,7 +774,8 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         getHandler().post(new Runnable() {
             @Override
             public void run() {
-                videoPlayer.Pause();
+                if (videoPlayer != null)
+                    videoPlayer.Pause();
             }
         });
     }
@@ -776,14 +793,17 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         getHandler().post(new Runnable() {
             @Override
             public void run() {
-                videoPlayer.Stop();
-                videoPlayer = null;
+                if (videoPlayer != null) {
+                    videoPlayer.Stop();
+                    videoPlayer = null;
+                }
             }
         });
     }
 
     public void Destroy() {
         Log.d(TAG, "Destroy player " + m_nPlayIndex);
+        m_bDestroyed = true;
 
         // 先从全局map移除，防止后续事件再调用到此实例
         if (s_AllPlayers != null) {
@@ -923,7 +943,8 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         getHandler().post(new Runnable() {
             @Override
             public void run() {
-                videoPlayer.SetLooping(looping);
+                if (videoPlayer != null)
+                    videoPlayer.SetLooping(looping);
             }
         });
     }
@@ -946,7 +967,8 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         getHandler().post(new Runnable() {
             @Override
             public void run() {
-                videoPlayer.SetPlaybackPosition(percent);
+                if (videoPlayer != null)
+                    videoPlayer.SetPlaybackPosition(percent);
             }
         });
     }
@@ -958,7 +980,8 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         getHandler().post(new Runnable() {
             @Override
             public void run() {
-                videoPlayer.SetPlaybackSpeed(speed);
+                if (videoPlayer != null)
+                    videoPlayer.SetPlaybackSpeed(speed);
             }
         });
     }
@@ -1048,7 +1071,8 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         getHandler().post(new Runnable() {
             @Override
             public void run() {
-                videoPlayer.SetVolume(volume);
+                if (videoPlayer != null)
+                    videoPlayer.SetVolume(volume);
             }
         });
     }

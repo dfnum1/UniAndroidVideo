@@ -8,6 +8,7 @@
 #include <string>
 #include <list>
 #include <map>
+#include <mutex>
 #ifdef _ANDROID
 #include <android/api-level.h>
 #include <android/log.h>
@@ -56,6 +57,7 @@ struct SSurfaceTextureInfo
 };
 
 std::map<int, SSurfaceTextureInfo*> g_VideoJavaClassMap;
+static std::mutex g_MapMutex;
 
 JNIEnv* getEnv()
 {
@@ -217,25 +219,44 @@ static void UNITY_INTERFACE_API OnRenderEvent(int eventID)
     int playerIndex = (eventID >> 8) & 0xFF;
     int gfxType = eventID & 0xFF;
 
-    std::map<int, SSurfaceTextureInfo*>::iterator it = g_VideoJavaClassMap.find(playerIndex);
-    if(it == g_VideoJavaClassMap.end())
+    int classId = -1;
+    {
+        std::lock_guard<std::mutex> lock(g_MapMutex);
+        std::map<int, SSurfaceTextureInfo*>::iterator it = g_VideoJavaClassMap.find(playerIndex);
+        if(it == g_VideoJavaClassMap.end())
+        {
+            if(g_InvBridgeInterface.pRenderEvent !=NULL)
+                g_InvBridgeInterface.pRenderEvent(eventID);
+            return;
+        }
+        classId = it->second->classId;
+    }
+
+    // 对于Destroy事件(type=5)，先调用Unity回调再执行Java侧的销毁
+    // 避免Java销毁GL资源后Unity回调仍尝试访问这些资源导致崩溃
+    if(eventType == 5)
     {
         if(g_InvBridgeInterface.pRenderEvent !=NULL)
             g_InvBridgeInterface.pRenderEvent(eventID);
-
-        return;
     }
 
     jclass videoClass = gVideoClass;
     auto env = getEnv();
-    jmethodID playVideoMethodID = env->GetStaticMethodID(videoClass, "OnRendererEvent", "(II)V");
-    env->CallStaticVoidMethod(videoClass, playVideoMethodID, eventID, it->second->classId);
+    if(env != nullptr && videoClass != nullptr)
+    {
+        jmethodID playVideoMethodID = env->GetStaticMethodID(videoClass, "OnRendererEvent", "(II)V");
+        if(playVideoMethodID != nullptr)
+        {
+            env->CallStaticVoidMethod(videoClass, playVideoMethodID, eventID, classId);
+        }
+    }
 
     // 注意：Destroy事件(type=5)不在这里清理map条目！
     // 因为索引可能已被回收并分配给新播放器，此时清理会误删新播放器的条目。
     // map条目的清理统一由 SetVideoJavaClass（索引复用时）和 DestroyVideoSurface（显式调用）负责。
 
-    if(g_InvBridgeInterface.pRenderEvent !=NULL)
+    // 非Destroy事件在Java调用之后再触发Unity回调
+    if(eventType != 5 && g_InvBridgeInterface.pRenderEvent !=NULL)
         g_InvBridgeInterface.pRenderEvent(eventID);
 }
 
@@ -246,6 +267,7 @@ extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API InitInvBridgeInterfac
 
 extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API SetVideoJavaClass(int index, int classIndex)
 {
+    std::lock_guard<std::mutex> lock(g_MapMutex);
     // 如果已存在旧条目，先清理再创建新的（支持索引复用）
     std::map<int, SSurfaceTextureInfo*>::iterator existing = g_VideoJavaClassMap.find(index);
     if(existing != g_VideoJavaClassMap.end())
@@ -273,6 +295,7 @@ extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API SetVideoJavaClass(int
 
 extern "C" void* UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API GetSurfaceTextureHandle(int index)
 {
+    std::lock_guard<std::mutex> lock(g_MapMutex);
     std::map<int, SSurfaceTextureInfo*>::iterator it = g_VideoJavaClassMap.find(index);
     if(it == g_VideoJavaClassMap.end())
         return NULL;
@@ -283,6 +306,7 @@ extern "C" void* UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API GetSurfaceTextureHan
 
 extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API DestroyVideoSurface(int index)
 {
+    std::lock_guard<std::mutex> lock(g_MapMutex);
     std::map<int, SSurfaceTextureInfo*>::iterator it = g_VideoJavaClassMap.find(index);
     if(it == g_VideoJavaClassMap.end())
         return;
