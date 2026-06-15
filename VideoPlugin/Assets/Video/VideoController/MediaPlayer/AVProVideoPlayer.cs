@@ -414,7 +414,7 @@ namespace GameApp.Media
         public Texture GetTexture(int index = 0)
         {
             Texture result = null;
-            if (m_VideoPlayer && IsPlaying() && m_VideoPlayer.TextureProducer!=null && m_VideoPlayer.TextureProducer.GetTexture()!=null)
+            if (m_VideoPlayer && m_VideoPlayer.TextureProducer!=null && m_VideoPlayer.TextureProducer.GetTexture()!=null)
             {
                 var resamplerTex = m_VideoPlayer.FrameResampler == null || m_VideoPlayer.FrameResampler.OutputTexture == null ? null : m_VideoPlayer.FrameResampler.OutputTexture[index];
                 result = m_VideoPlayer.UseResampler ? resamplerTex : m_VideoPlayer.TextureProducer.GetTexture();

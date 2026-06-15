@@ -229,7 +229,11 @@ static void UNITY_INTERFACE_API OnRenderEvent(int eventID)
     jclass videoClass = gVideoClass;
     auto env = getEnv();
     jmethodID playVideoMethodID = env->GetStaticMethodID(videoClass, "OnRendererEvent", "(II)V");
-        env->CallStaticVoidMethod(videoClass, playVideoMethodID, eventID, it->second->classId);
+    env->CallStaticVoidMethod(videoClass, playVideoMethodID, eventID, it->second->classId);
+
+    // 注意：Destroy事件(type=5)不在这里清理map条目！
+    // 因为索引可能已被回收并分配给新播放器，此时清理会误删新播放器的条目。
+    // map条目的清理统一由 SetVideoJavaClass（索引复用时）和 DestroyVideoSurface（显式调用）负责。
 
     if(g_InvBridgeInterface.pRenderEvent !=NULL)
         g_InvBridgeInterface.pRenderEvent(eventID);
@@ -242,8 +246,26 @@ extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API InitInvBridgeInterfac
 
 extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API SetVideoJavaClass(int index, int classIndex)
 {
-    if(g_VideoJavaClassMap.find(index) != g_VideoJavaClassMap.end())
-        return;
+    // 如果已存在旧条目，先清理再创建新的（支持索引复用）
+    std::map<int, SSurfaceTextureInfo*>::iterator existing = g_VideoJavaClassMap.find(index);
+    if(existing != g_VideoJavaClassMap.end())
+    {
+        SSurfaceTextureInfo* oldInfo = existing->second;
+        auto env = getEnv();
+        if(oldInfo->surfaceTexture != nullptr)
+        {
+            env->DeleteGlobalRef(oldInfo->surfaceTexture);
+            oldInfo->surfaceTexture = nullptr;
+        }
+        if(oldInfo->surface != nullptr)
+        {
+            env->DeleteGlobalRef(oldInfo->surface);
+            oldInfo->surface = nullptr;
+        }
+        delete oldInfo;
+        g_VideoJavaClassMap.erase(existing);
+        Log("SetVideoJavaClass: cleaned up existing entry for index reuse");
+    }
     SSurfaceTextureInfo* surfaceTexture = new SSurfaceTextureInfo();
     surfaceTexture->classId = classIndex;
     g_VideoJavaClassMap[index] = surfaceTexture;

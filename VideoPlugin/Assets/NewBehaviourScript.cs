@@ -5,7 +5,34 @@ using UnityEngine;
 
 public class NewBehaviourScript : MonoBehaviour
 {
-    public UIVideo uiVideo;
+    public UIVideo video1;
+    public UIVideo video2;
+    string[] videos =
+    {
+        "CH01_0001_ZhuJiao.mp4",
+        "CH01_0002_ZhuJiao.mp4",
+        "CH01_0004_SaiDi.mp4",
+        "CH01_0004_ZhuJiao.mp4",
+        "CH01_0006_ZhuJiao.mp4",
+        "CH01_0007_SaiLinNa.mp4",
+        "CH01_0009_SaiDi.mp4",
+        "CH01_0010_SiDiEr.mp4",
+        "CH01_0012_SaiDi.mp4",
+        "CH01_0012_ZhuJiao.mp4",
+        "CH01_0015_YiTaiLingMiao.mp4",
+        "CH01_0018_SiDiEr.mp4",
+        "CH01_0025_AnYingTuanMan.mp4",
+        "CH01_0031_QiYi.mp4",
+        "CH01_0032_AnYingTuanBoss.mp4",
+        "CH01_0050_QiYi.mp4",
+        "CH01_0051_LiLa.mp4",
+        "CH01_0052_LiLa.mp4",
+        "CH01_0053_Niya.mp4",
+        "CH01_0054_Niya.mp4",
+        "Fg_Dremio_Idle.mp4",
+        "CH01_0051_LiLa.mp4"
+    };
+    int m_nPlayerIndex = 0;
     // Start is called before the first frame update
     void Start()
     {
@@ -20,10 +47,21 @@ public class NewBehaviourScript : MonoBehaviour
 
     public void Stop()
     {
-        uiVideo.Stop();
+        if (video1 != null) video1.Stop();
+        if (video2 != null) video2.Stop();
     }
     public void RePlay()
     {
-        uiVideo.Play("Fg_Dremio_Wakeup.mp4", false,true);
+        if(m_nPlayerIndex%2==0)
+        {
+            if (video2 != null) video2.Stop();
+            video1.Play(videos[m_nPlayerIndex % videos.Length], false, true);
+        }
+        else
+        {
+            if (video1 != null) video1.Stop();
+            video2.Play(videos[m_nPlayerIndex % videos.Length], false, true);
+        }
+        m_nPlayerIndex++;
     }
 }

@@ -42,6 +42,9 @@ namespace GameApp.Media
         [DllImport(CoreDLL, CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetVideoJavaClass(int index, int classId);
 
+        [DllImport(CoreDLL, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void DestroyVideoSurface(int index);
+
         [DllImport(CoreDLL)]
         static extern int GetGfxRenderDeviceType();
 

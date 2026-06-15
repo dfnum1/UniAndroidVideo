@@ -16,6 +16,7 @@ namespace GameApp.Media
 
             LoadFailed = 100,
             DecodeFailed = 200,
+            KeepEndFrame,
             // TODO: 
             //FinishedSeeking,	// Called when seeking has finished
             //StartLoop,			// Called when the video starts and is in loop mode

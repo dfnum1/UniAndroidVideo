@@ -783,13 +783,30 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     }
 
     public void Destroy() {
-        Stop();
-        DestroySurface();
-        DestroyGl();
+        Log.d(TAG, "Destroy player " + m_nPlayIndex);
 
+        // 先从全局map移除，防止后续事件再调用到此实例
+        if (s_AllPlayers != null) {
+            s_AllPlayers.remove(Integer.valueOf(this.m_nPlayIndex));
+            if (s_AllPlayers.isEmpty()) {
+                s_AllPlayers.clear();
+                s_AllPlayers = null;
+            }
+        }
+
+        // 停止视频播放器并释放MediaCodec资源（这是关键！必须确保release被调用）
         getHandler().post(new Runnable() {
             @Override
             public void run() {
+                try {
+                    if (videoPlayer != null) {
+                        videoPlayer.Stop(); // 内部会调用exoPlayer.stop() + exoPlayer.release()
+                        videoPlayer = null;
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error stopping video player: " + e.getMessage());
+                }
+
                 // Release the cache when destroying the player
                 if (downloadCache != null) {
                     try {
@@ -801,6 +818,9 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                 }
             }
         });
+
+        DestroySurface();
+        DestroyGl();
     }
 
     private void DestroyGl() {
@@ -822,7 +842,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
 
     private void DestroySurface() {
         try {
-         //   Log.d(TAG, "DestroySurface: Starting");
+            // Log.d(TAG, "DestroySurface: Starting");
 
             final Surface oldSurface = mySurface;
             final SurfaceTexture oldSurfaceTexture = surfaceTexture;
@@ -853,7 +873,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
 
                         // 2. Release Surface
                         if (oldSurface != null) {
-                           // Log.d(TAG, "DestroySurface: Releasing mySurface");
+                            // Log.d(TAG, "DestroySurface: Releasing mySurface");
                             try {
                                 oldSurface.release();
                             } catch (Exception e) {
@@ -863,7 +883,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
 
                         // 3. Release ImageReader
                         if (oldImageReader != null) {
-                           // Log.d(TAG, "DestroySurface: Closing mVideImageReader");
+                            // Log.d(TAG, "DestroySurface: Closing mVideImageReader");
                             try {
                                 oldImageReader.close();
                             } catch (Exception e) {
@@ -873,7 +893,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
 
                         // 4. Release SurfaceTexture
                         if (oldSurfaceTexture != null) {
-                        //    Log.d(TAG, "DestroySurface: Releasing surfaceTexture");
+                            // Log.d(TAG, "DestroySurface: Releasing surfaceTexture");
                             try {
                                 oldSurfaceTexture.setOnFrameAvailableListener(null);
                                 oldSurfaceTexture.release();
@@ -887,7 +907,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                 }
             });
 
-          //  Log.d(TAG, "DestroySurface: Cleanup scheduled");
+            // Log.d(TAG, "DestroySurface: Cleanup scheduled");
         } catch (Exception ex) {
             Log.e(TAG, "DestroySurface Exception: " + ex.getMessage());
             ex.printStackTrace();

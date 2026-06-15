@@ -60,10 +60,13 @@
     <Analyzer Include="D:\Program Files\Unity 2022.3.62f2\Editor\Data\Tools\Unity.SourceGenerators\Unity.Properties.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets\Video\VideoController\KeylightChromaKey\KeylightEffect.cs" />
     <Compile Include="Assets\Video\VideoController\MediaPlayer\ExoMediaPlayer.cs" />
+    <Compile Include="Assets\Video\VideoController\KeylightChromaKey\KeylightEffectEditor.cs" />
     <Compile Include="Assets\Video\VideoController\MediaPlayer\AndroidMediaPlayer.cs" />
     <Compile Include="Assets\Video\VideoController\MediaPlayer\WindowsMediaPlayer.cs" />
     <Compile Include="Assets\Video\VideoController\MediaPlayer\MediaPlayer.cs" />
+    <Compile Include="Assets\Video\UIVideoEditorWindow.cs" />
     <Compile Include="Assets\Video\UIVideo.cs" />
     <Compile Include="Assets\Video\VideoController\VideoController.cs" />
     <Compile Include="Assets\NewBehaviourScript.cs" />
@@ -72,6 +75,7 @@
     <Compile Include="Assets\Video\VideoController\MediaPlayer\UnityMediaPlayer.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Assets\Video\VideoController\KeylightChromaKey\Shaders\KeylightChromaKey.shader" />
     <None Include="Assets\Resources\UI_Video.shader" />
   </ItemGroup>
   <ItemGroup>

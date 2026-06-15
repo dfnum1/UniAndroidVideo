@@ -77,6 +77,7 @@ public class VideoPlayer {
     private volatile long lastPlaybackUpdateTime;
     private volatile float lastPlaybackSpeed;
     private volatile boolean isDirtySurfaceSize;
+    private volatile boolean hasRetriedDecoderInit = false; // 标记是否已经尝试过重新初始化解码器
 
     private ExoPlayerUnity m_ExoPlayerUnity;
 
@@ -242,7 +243,15 @@ public class VideoPlayer {
                 // 检查是否是解码器初始化失败
                 if (error.getMessage().contains("Decoder init failed") ||
                         error.getMessage().contains("MediaCodecRenderer$DecoderInitializationException")) {
-                    Log.e(TAG, "解码器初始化失败，尝试使用软解码器...");
+
+                    // 只尝试一次重新初始化，避免无限重试循环
+                    if (hasRetriedDecoderInit) {
+                        Log.e(TAG, "解码器初始化再次失败，不再重试。");
+                        return;
+                    }
+                    hasRetriedDecoderInit = true;
+
+                    Log.e(TAG, "解码器初始化失败，尝试重新初始化播放器（仅一次）...");
 
                     // 在ExoPlayer 2.15.1中，当解码器失败时，我们可以尝试重新初始化播放器
                     // 这里添加延迟处理，避免立即重试导致的循环

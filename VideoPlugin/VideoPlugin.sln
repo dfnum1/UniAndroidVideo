@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AVProVideo.Runtime", "AVProVideo.Runtime.csproj", "{EE973F5A-BD45-DC6D-55D8-0A79C4A6250B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Assembly-CSharp", "Assembly-CSharp.csproj", "{A0E5017C-82D8-0896-3BD8-1FC1489CD179}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AVProVideo.Editor", "AVProVideo.Editor.csproj", "{9203A0B6-67DF-938E-C448-54503E8E7F78}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AVProVideo.Extensions.VisualEffectGraph", "AVProVideo.Extensions.VisualEffectGraph.csproj", "{6176C7FB-20A3-0798-215A-69BDB88D2F6E}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Assembly-CSharp", "Assembly-CSharp.csproj", "{A0E5017C-82D8-0896-3BD8-1FC1489CD179}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AVProVideo.Extensions.UnityUI", "AVProVideo.Extensions.UnityUI.csproj", "{6289791B-0BE5-21CF-E242-369F0CA1A12B}"
 EndProject
@@ -29,6 +29,10 @@ Global
 		{EE973F5A-BD45-DC6D-55D8-0A79C4A6250B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EE973F5A-BD45-DC6D-55D8-0A79C4A6250B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EE973F5A-BD45-DC6D-55D8-0A79C4A6250B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A0E5017C-82D8-0896-3BD8-1FC1489CD179}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A0E5017C-82D8-0896-3BD8-1FC1489CD179}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A0E5017C-82D8-0896-3BD8-1FC1489CD179}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A0E5017C-82D8-0896-3BD8-1FC1489CD179}.Release|Any CPU.Build.0 = Release|Any CPU
 		{9203A0B6-67DF-938E-C448-54503E8E7F78}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{9203A0B6-67DF-938E-C448-54503E8E7F78}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9203A0B6-67DF-938E-C448-54503E8E7F78}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -37,10 +41,6 @@ Global
 		{6176C7FB-20A3-0798-215A-69BDB88D2F6E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6176C7FB-20A3-0798-215A-69BDB88D2F6E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6176C7FB-20A3-0798-215A-69BDB88D2F6E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A0E5017C-82D8-0896-3BD8-1FC1489CD179}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A0E5017C-82D8-0896-3BD8-1FC1489CD179}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A0E5017C-82D8-0896-3BD8-1FC1489CD179}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A0E5017C-82D8-0896-3BD8-1FC1489CD179}.Release|Any CPU.Build.0 = Release|Any CPU
 		{6289791B-0BE5-21CF-E242-369F0CA1A12B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{6289791B-0BE5-21CF-E242-369F0CA1A12B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6289791B-0BE5-21CF-E242-369F0CA1A12B}.Release|Any CPU.ActiveCfg = Release|Any CPU

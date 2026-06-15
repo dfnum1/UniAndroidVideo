@@ -6,6 +6,7 @@
 *********************************************************************/
 #if UNITY_ANDROID && !UNITY_EDITOR
 using System.Collections;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.Video;
@@ -105,7 +106,10 @@ namespace GameApp.Media
 
 
         protected bool m_bResumeCall = false;
+        // 使用索引回收池，避免 playerIndex 超过255（8位编码限制）
         static int ms_VideoIndex = 0;
+        static Queue<int> ms_RecycledIndices = new Queue<int>();
+        static HashSet<int> ms_ActiveIndices = new HashSet<int>();
         AndroidJavaClass m_pSurfaceTextureClass;
         AndroidJavaClass m_pSurfaceViewClass;
 
@@ -231,6 +235,51 @@ namespace GameApp.Media
             }
         }
         //-------------------------------------------------
+        /// <summary>
+        /// 分配一个可用的播放器索引（优先从回收池取，避免超过255的8位编码限制）
+        /// </summary>
+        private static int AllocatePlayerIndex()
+        {
+            int index;
+            if (ms_RecycledIndices.Count > 0)
+            {
+                index = ms_RecycledIndices.Dequeue();
+            }
+            else
+            {
+                index = ms_VideoIndex++;
+                if (index > 255)
+                {
+                    Debug.LogError("[ExoMediaPlayer] 播放器索引超过255上限！事件编码将出错！请确保视频播放器被正确释放。");
+                    // 强制回绕，尽量找一个未使用的索引
+                    index = 0;
+                    while (ms_ActiveIndices.Contains(index) && index < 256)
+                    {
+                        index++;
+                    }
+                    if (index >= 256)
+                    {
+                        Debug.LogError("[ExoMediaPlayer] 无法分配播放器索引，所有256个槽位都在使用中！");
+                        return -1;
+                    }
+                }
+            }
+            ms_ActiveIndices.Add(index);
+            return index;
+        }
+
+        /// <summary>
+        /// 回收播放器索引，放回回收池
+        /// </summary>
+        private static void RecyclePlayerIndex(int index)
+        {
+            if (index >= 0 && index < 256)
+            {
+                ms_ActiveIndices.Remove(index);
+                ms_RecycledIndices.Enqueue(index);
+            }
+        }
+
         void Init(bool useFastOesPath, bool showPosterFrame)
 		{
 #if UNITY_ANDROID
@@ -241,9 +290,18 @@ namespace GameApp.Media
             CoreNavtive.OnRenderEventCallback += OnRenderEvent;
             if (m_Video != null)
             {
-                // Initialise
-                m_iPlayerIndex = ms_VideoIndex++;
+                // 使用索引回收机制，避免超过255
+                m_iPlayerIndex = AllocatePlayerIndex();
+                if (m_iPlayerIndex < 0)
+                {
+                    Debug.LogError("[ExoMediaPlayer] Init failed: 无法分配播放器索引");
+                    m_Video.Dispose();
+                    m_Video = null;
+                    return;
+                }
+
                 m_Video.Call("Initialise", MetalAPI.s_ActivityContext, m_iPlayerIndex);
+                // SetVideoJavaClass内部会自动清理旧条目（如果存在），再创建新的
                 CoreNavtive.SetVideoJavaClass(m_iPlayerIndex, 2);
                 SetOptions(useFastOesPath, showPosterFrame);
 
@@ -1133,8 +1191,20 @@ namespace GameApp.Media
 		{
             //Debug.LogError("DISPOSE");
 
+            StopRenderCoroutine();
+
             // Deinitialise player (replaces call directly as GL textures are involved)
-            IssuePluginEvent(Native.ExoPlayerEvent.Destroy, m_iPlayerIndex);
+            if (m_iPlayerIndex >= 0)
+            {
+                IssuePluginEvent(Native.ExoPlayerEvent.Destroy, m_iPlayerIndex);
+                // 注意：不在这里调用DestroyVideoSurface，因为IssuePluginEvent是异步的（渲染线程），
+                // 如果在主线程立即删除map条目，可能与渲染线程产生竞态。
+                // map条目的清理交由下一次Init()中的SetVideoJavaClass处理（索引复用时自动清理旧条目）。
+                
+                // 回收索引到回收池，供后续播放器复用
+                RecyclePlayerIndex(m_iPlayerIndex);
+                m_iPlayerIndex = -1;
+            }
 
             if (m_Video != null)
 			{

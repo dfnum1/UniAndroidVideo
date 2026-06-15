@@ -12,6 +12,10 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.IO;
+#if UNITY_EDITOR
+using System.Security.Cryptography;
+using System.Text;
+#endif
 
 namespace GameApp.Media
 {
@@ -227,80 +231,80 @@ namespace GameApp.Media
 
         public const string avproDirName = "avpro";
         public static string PrepareForPlayWithName(string assetName)
-        {/*
-            //目前播视频都统一用不压缩的ab包，从persistentpath下改后缀转存一遍,返回persistentpath路径去播
-            var assetHelper = IoCRepository.Instance.Get<IAssetLocalHelper>();
-            var assetFileModule = IoCRepository.Instance.Get<AssetsFileModule>();
-            var playUrl = assetName;
-            if (assetHelper.CheckAssetRes(assetName, out AssetDataInfo data))
-            {
-#if UNITY_EDITOR
-                string md5 = GetFileMD5(data.assetName);
-                string cacheFile = GetAVProAssetSavePathWithMD5(assetName, md5);
-                if (File.Exists(cacheFile))
-                {
-                    return cacheFile;
-                }
+        {
+            return assetName;
+//            //目前播视频都统一用不压缩的ab包，从persistentpath下改后缀转存一遍,返回persistentpath路径去播
+//            var assetHelper = IoCRepository.Instance.Get<IAssetLocalHelper>();
+//            var assetFileModule = IoCRepository.Instance.Get<AssetsFileModule>();
+//            var playUrl = assetName;
+//            if (assetHelper.CheckAssetRes(assetName, out AssetDataInfo data))
+//            {
+//#if UNITY_EDITOR
+//                string md5 = GetFileMD5(data.assetName);
+//                string cacheFile = GetAVProAssetSavePathWithMD5(assetName, md5);
+//                if (File.Exists(cacheFile))
+//                {
+//                    return cacheFile;
+//                }
 
-                string dir = System.IO.Path.GetDirectoryName(cacheFile);
-                if (!Directory.Exists(dir))
-                {
-                    Directory.CreateDirectory(dir);
-                }
+            //                string dir = System.IO.Path.GetDirectoryName(cacheFile);
+            //                if (!Directory.Exists(dir))
+            //                {
+            //                    Directory.CreateDirectory(dir);
+            //                }
 
-                string[] files = Directory.GetFiles(dir, $"{assetName}*.mp4");
-                foreach (var file in files)
-                {
-                    try
-                    {
-                        File.Delete(file);
-                    }
-                    catch
-                    {
-                        // 忽略删除异常
-                    }
-                }
+            //                string[] files = Directory.GetFiles(dir, $"{assetName}*.mp4");
+            //                foreach (var file in files)
+            //                {
+            //                    try
+            //                    {
+            //                        File.Delete(file);
+            //                    }
+            //                    catch
+            //                    {
+            //                         /* 忽略删除异常 */
+            //                    }
+            //                }
 
-                try
-                {
-                    File.Copy(data.assetName, cacheFile, true);
-                }
-                catch
-                {
-                    
-                }
-                return cacheFile;
-#endif
-                string abName = data.assetbundle;
-                string hash = assetFileModule.GetAssetbundleHash(abName);
-                Debug.LogFormat("[TestUIVideo] PlayWithVideoName:{0}, bunble:{1}, hash:{2}", assetName, abName, hash);
-                string avproDir = GetAVProPath();
-                if (!Directory.Exists(avproDir))
-                {
-                    Directory.CreateDirectory(avproDir);
-                }
-                var loader = ResourceLoader.Create();
-                string avproAssetPath = GetAVProAssetSavePath(assetName, hash);
-                if (File.Exists(avproAssetPath))
-                {
-                    playUrl = GetAVProAssetRelastePath(assetName, hash);
-                }
-                else
-                {
-                    loader.LoadAsset(assetName, (UnityEngine.Object asset) =>
-                    {
-                        TextAsset byteVideo = asset as TextAsset;
-                        File.WriteAllBytes(avproAssetPath, byteVideo.bytes);
-                        playUrl = GetAVProAssetRelastePath(assetName, hash);
-                        Debug.LogFormat("[TestUIVideo] Name:{0}, SaveAt:{1}, Url:{2}", assetName, avproAssetPath, playUrl);
-                    }, ResourceLoadMethod.Sync);
-                }
-                //确认avpro目录下无过期文件
-                DeleteExpiredAVProFile(assetName, hash);
-            }
-            Debug.LogFormat("[TestUIVideo] PrepareForPlayWithName, Url:{0}", playUrl);
-            return playUrl;
-			*/
+            //                try
+            //                {
+            //                    File.Copy(data.assetName, cacheFile, true);
+            //                }
+            //                catch
+            //                {
+
+            //                }
+            //                return cacheFile;
+            //#endif
+            //                string abName = data.assetbundle;
+            //                string hash = assetFileModule.GetAssetbundleHash(abName);
+            //                Debug.LogFormat("[TestUIVideo] PlayWithVideoName:{0}, bunble:{1}, hash:{2}", assetName, abName, hash);
+            //                string avproDir = GetAVProPath();
+            //                if (!Directory.Exists(avproDir))
+            //                {
+            //                    Directory.CreateDirectory(avproDir);
+            //                }
+            //                var loader = ResourceLoader.Create();
+            //                string avproAssetPath = GetAVProAssetSavePath(assetName, hash);
+            //                if (File.Exists(avproAssetPath))
+            //                {
+            //                    playUrl = GetAVProAssetRelastePath(assetName, hash);
+            //                }
+            //                else
+            //                {
+            //                    loader.LoadAsset(assetName, (UnityEngine.Object asset) =>
+            //                    {
+            //                        TextAsset byteVideo = asset as TextAsset;
+            //                        File.WriteAllBytes(avproAssetPath, byteVideo.bytes);
+            //                        playUrl = GetAVProAssetRelastePath(assetName, hash);
+            //                        Debug.LogFormat("[TestUIVideo] Name:{0}, SaveAt:{1}, Url:{2}", assetName, avproAssetPath, playUrl);
+            //                    }, ResourceLoadMethod.Sync);
+            //                }
+            //                //确认avpro目录下无过期文件
+            //                DeleteExpiredAVProFile(assetName, hash);
+            //            }
+            //            Debug.LogFormat("[TestUIVideo] PrepareForPlayWithName, Url:{0}", playUrl);
+            //            return playUrl;
             return null;
         }
 

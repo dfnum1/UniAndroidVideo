@@ -1,4 +1,4 @@
-﻿using GameApp.Media;
+using GameApp.Media;
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -12,6 +12,26 @@ namespace GameApp.UIComponent
 {
     public class UIVideo : RawImage
     {
+        struct EraserParam
+        {
+            public byte eraserType;//0-none; 1:color erasure; 2:keylight erasure
+            public Color erasureColor;
+            public float colorCutoff;
+            public float colorFeathering;
+            public float maskFeathering;
+            public float despill;
+            public float despillLuminanceAdd;
+            public void Clear()
+            {
+                eraserType = 0;
+            }
+        }
+        [System.Serializable]
+        public struct Event
+        {
+            public float time;
+            public string strValue;
+        }
         const float ALPHA_TIME = 0.25f;
         public string url;
         public bool bLoop = true;
@@ -24,25 +44,35 @@ namespace GameApp.UIComponent
         public bool disableDontStop = false;
         public bool autoNativeSize = false;
         [SerializeField] private bool useCustomParams = false;
+        [SerializeField] private bool keepEndFrame = false;
         [SerializeField][Range(0, 1)] private float colorCutoff;
         [SerializeField][Range(0, 1)] private float colorFeathering;
         [SerializeField][Range(0, 1)] private float maskFeathering;
         [SerializeField][Range(0, 1)] private float despill;
         [SerializeField][Range(0, 1)] private float despillLuminanceAdd;
+        [SerializeField] private Event[] triggerEvents;
+
+        [SerializeField]private Vector4 edgeCliper = Vector4.zero;
+        [SerializeField][Range(0, 1)] private float edgeClipFade = 0;
 
         [SerializeField] private  KeylightEffect m_KeyLight = new KeylightEffect();
 
-
+        private bool m_bKeepEndRePlay = false;
+        private bool m_bKeepEndFrameTrigger = false;
         private string m_strUrl = null;
         private float m_fDelayPlay = 0.0f;
         private bool m_bVideoLoop = true;
         private bool m_bPersistentPath = false;
         private IMediaPlayer m_VideoPlayer;
         private IMediaPlayer m_LastVideoPlayer;
+        private EraserParam m_LastEraserParam = new EraserParam();
         private System.Action<MediaPlayerEvent.EventType> m_pCallback = null;
+        private System.Action<string> m_pEventCallback = null;
 
         private float m_fAlphaTime = 0.0f;
         private float m_fAlphaFade = 1;
+
+        private uint m_TriggerEventFlags = 0;
 
         private Material m_pNewMaterail = null;
         public static int _ColorId = Shader.PropertyToID("_Color");
@@ -51,9 +81,13 @@ namespace GameApp.UIComponent
         public static int _MaskFeathering = Shader.PropertyToID("_MaskFeathering");
         public static int _Despill = Shader.PropertyToID("_Despill");
         public static int _DespillLuminanceAdd = Shader.PropertyToID("_DespillLuminanceAdd");
+        public static int _EdgeCliper = Shader.PropertyToID("_EdgeCliper");
+        public static int _EdgeFeather = Shader.PropertyToID("_EdgeFeatherFade");
         //------------------------------------------------------
         protected override void Awake()
         {
+            m_TriggerEventFlags = 0;
+            m_bKeepEndFrameTrigger = false;
             m_fAlphaFade = 1;
             erasureColor.a = 0.0f;
             this.color = erasureColor;
@@ -62,6 +96,8 @@ namespace GameApp.UIComponent
         //------------------------------------------------------
         protected override void Start()
         {
+            m_TriggerEventFlags = 0;
+            m_bKeepEndFrameTrigger = false;
             m_fAlphaFade = 1;
             erasureColor.a = 0.0f;
             this.color = erasureColor;
@@ -71,6 +107,8 @@ namespace GameApp.UIComponent
         //------------------------------------------------------
         protected override void OnDisable()
         {
+            m_TriggerEventFlags = 0;
+            m_bKeepEndFrameTrigger = false;
             if (disableDontStop)
             {
                 base.OnDisable();
@@ -83,18 +121,23 @@ namespace GameApp.UIComponent
         //------------------------------------------------------
         protected override void OnEnable()
         {
+            m_TriggerEventFlags = 0;
             if (disableDontStop)
             {
                 base.OnEnable();
                 return;
             }
+            m_bKeepEndFrameTrigger = false;
             StartVideo();
             base.OnEnable();
         }
         //------------------------------------------------------
         protected override void OnDestroy()
         {
+            m_TriggerEventFlags = 0;
             base.OnDestroy();
+            Stop();
+            m_bKeepEndFrameTrigger = false;
             m_KeyLight.Cleanup();
             DestroyNewMaterial();
         }
@@ -139,6 +182,7 @@ namespace GameApp.UIComponent
         //------------------------------------------------------
         public void StartVideo()
         {
+            m_bKeepEndFrameTrigger = false;
             m_fAlphaTime = ALPHA_TIME;
             m_fAlphaFade = 1;
             erasureColor.a = 0.0f;
@@ -147,7 +191,7 @@ namespace GameApp.UIComponent
             if (!string.IsNullOrEmpty(url))
             {
 #if UNITY_EDITOR
-                if (Application.isPlaying) Play(url, bPersistentPath, bLoop, delayPlay);
+                Play(url, bPersistentPath, bLoop, delayPlay);
 #else
                 Play(url, bPersistentPath, bLoop, delayPlay);
 #endif
@@ -156,11 +200,16 @@ namespace GameApp.UIComponent
         //------------------------------------------------------
         public void Stop()
         {
+            m_TriggerEventFlags = 0;
+            m_bKeepEndRePlay = false;
+            m_bKeepEndFrameTrigger = false;
             VideoController.StopVideo(m_VideoPlayer);
             m_VideoPlayer = null;
             VideoController.StopVideo(m_LastVideoPlayer);
             m_LastVideoPlayer = null;
+            m_LastEraserParam.Clear();
             m_pCallback = null;
+            m_pEventCallback = null;
             m_fDelayPlay = 0.0f;
             m_fAlphaFade = 1;
             m_strUrl = null;
@@ -175,6 +224,36 @@ namespace GameApp.UIComponent
             this.color = erasureColor;
         }
         //------------------------------------------------------
+        void BackupEraserParam()
+        {
+            if (this.bKeylightErasure) m_LastEraserParam.eraserType = 2;
+            else if (this.bErasure) m_LastEraserParam.eraserType = 1;
+            else m_LastEraserParam.eraserType = 0;
+            m_LastEraserParam.erasureColor = this.erasureColor;
+            m_LastEraserParam.colorCutoff = this.colorCutoff;
+            m_LastEraserParam.colorFeathering = this.colorFeathering;
+            m_LastEraserParam.maskFeathering = this.maskFeathering;
+            m_LastEraserParam.despill = this.despill;
+            m_LastEraserParam.despillLuminanceAdd = this.despillLuminanceAdd;
+        }
+        //------------------------------------------------------
+        public void DummyStop()
+        {
+            m_bKeepEndRePlay = false;
+            if (m_bKeepEndFrameTrigger) m_bKeepEndRePlay = true;
+            if (m_LastVideoPlayer!= m_VideoPlayer)
+            {
+                if(m_LastVideoPlayer!=null) VideoController.StopVideo(m_LastVideoPlayer);
+                m_LastVideoPlayer = null;
+            }
+
+            BackupEraserParam();
+            m_LastVideoPlayer = m_VideoPlayer;
+            m_VideoPlayer = null;
+            this.m_strUrl = null;
+            m_TriggerEventFlags = 0;
+        }
+        //------------------------------------------------------
         public void Pause()
         {
             if (m_VideoPlayer != null)
@@ -185,6 +264,12 @@ namespace GameApp.UIComponent
         {
             if (m_VideoPlayer != null)
                 m_VideoPlayer.Play();
+        }
+        //------------------------------------------------------
+        public float GetDuration()
+        {
+            if (m_VideoPlayer != null) return m_VideoPlayer.GetDurationMs() / 1000.0f;
+            return 0;
         }
         //------------------------------------------------------
         public bool IsPlaying()
@@ -203,16 +288,19 @@ namespace GameApp.UIComponent
             m_fAlphaFade = Mathf.Clamp01(alpha);
         }
         //------------------------------------------------------
-        public bool Play(UnityEngine.Video.VideoClip videoClip, bool bLoop = false, System.Action<MediaPlayerEvent.EventType> onCallback = null)
+        public bool Play(UnityEngine.Video.VideoClip videoClip, bool bLoop = false, System.Action<MediaPlayerEvent.EventType> onCallback = null, System.Action<string> onEvents = null)
         {
             if (videoClip == null)
             {
                 onCallback?.Invoke(MediaPlayerEvent.EventType.Error);
                 return false;
             }
+            m_TriggerEventFlags = 0;
+            m_bKeepEndFrameTrigger = false;
             delayPlay = 0.0f;
             m_bVideoLoop = bLoop;
             m_pCallback = onCallback;
+            m_pEventCallback = onEvents;
             if (m_VideoPlayer != null)
             {
                 if (m_VideoPlayer.GetVideoPath().CompareTo(videoClip.name) == 0)
@@ -237,8 +325,9 @@ namespace GameApp.UIComponent
             return true;
         }
         //------------------------------------------------------
-        public bool Play(string video, bool bPersistentPath, bool bLoop = false, float fDelayPlay = 0, System.Action<MediaPlayerEvent.EventType> pCallback = null)
+        public bool Play(string video, bool bPersistentPath, bool bLoop = false, float fDelayPlay = 0, System.Action<MediaPlayerEvent.EventType> pCallback = null, System.Action<string> onEvents = null)
         {
+            m_bKeepEndFrameTrigger = false;
             if (string.IsNullOrEmpty(video))
             {
                 if (pCallback != null) pCallback(MediaPlayerEvent.EventType.Error);
@@ -255,12 +344,13 @@ namespace GameApp.UIComponent
                 RefreshDirtyMaterial();
                 return true;
             }
-
+            m_TriggerEventFlags = 0;
             this.m_bVideoLoop = bLoop;
             this.m_bPersistentPath = bPersistentPath;
             this.m_strUrl = video;
             this.m_fDelayPlay = fDelayPlay;
             m_pCallback = pCallback;
+            m_pEventCallback = onEvents;
 
             if (fDelayPlay <= 0.0f)
             {
@@ -269,16 +359,33 @@ namespace GameApp.UIComponent
             return true;
         }
         //------------------------------------------------------
-        public void PlayWithVideoName(string assetName, bool bLoop = false, float fDelayPlay = 0, System.Action<MediaPlayerEvent.EventType> pCallback = null)
+        public void PlayWithVideoName(string assetName, bool bLoop = false, float fDelayPlay = 0, System.Action<MediaPlayerEvent.EventType> pCallback = null, System.Action<string> onEvents = null)
         {
             string assetPath = VideoController.PrepareForPlayWithName(assetName);
-            Play(assetPath, true, bLoop, fDelayPlay, pCallback);
+            Play(assetPath, true, bLoop, fDelayPlay, pCallback, onEvents);
         }
         //------------------------------------------------------
         public void SeekTime(float time)
         {
             if (m_VideoPlayer == null) return;
             m_VideoPlayer.Seek(time * 1000.0f);
+            if (m_bKeepEndFrameTrigger &&
+                keepEndFrame && !bLoop &&
+                m_VideoPlayer.GetDurationMs() > 0 && time < (m_VideoPlayer.GetDurationMs() / 1000.0f - Time.fixedDeltaTime))
+            {
+                m_bKeepEndFrameTrigger = false;
+            }
+
+            if (this.triggerEvents!=null)
+            {
+                for(int i =0; i < this.triggerEvents.Length; ++i)
+                {
+                    if(this.triggerEvents[i].time >= time)
+                    {
+                        m_TriggerEventFlags &= ~(1u << i);
+                    }
+                }
+            }
         }
         //------------------------------------------------------
         public void UseErasure(bool bKeylight)
@@ -375,14 +482,39 @@ namespace GameApp.UIComponent
             material.SetFloat(_DespillLuminanceAdd, despillLuminanceAdd);
         }
         //------------------------------------------------------
+        void UpdateLastMaterialParams()
+        {
+            if (material == null) return;
+            CheckCloneNewMaterial();
+            material.SetColor(_ColorId, m_LastEraserParam.erasureColor);
+            material.SetFloat(_ColorCutoff, m_LastEraserParam.colorCutoff);
+            material.SetFloat(_ColorFeathering, m_LastEraserParam.colorFeathering);
+            material.SetFloat(_MaskFeathering, m_LastEraserParam.maskFeathering);
+            material.SetFloat(_Despill, m_LastEraserParam.despill);
+            material.SetFloat(_DespillLuminanceAdd, m_LastEraserParam.despillLuminanceAdd);
+        }
+        //------------------------------------------------------
         void BackupLastVideo()
         {
+            m_bKeepEndRePlay = false;
             if (m_LastVideoPlayer != null)
             {
                 if (m_LastVideoPlayer != m_VideoPlayer)
                     VideoController.StopVideo(m_LastVideoPlayer);
             }
             m_LastVideoPlayer = m_VideoPlayer;
+            m_VideoPlayer = null;
+        }
+        //------------------------------------------------------
+        public void SetEdgeCliper(float top, float bottom, float left, float right, float fade)
+        {
+            edgeCliper = new Vector4(left, top, right, bottom);
+            edgeClipFade = fade;
+            if (material == null) return;
+            if(top !=0 || bottom!=0 || left!=0 || right!=0)
+                CheckCloneNewMaterial();
+            material.SetVector(_EdgeCliper, edgeCliper);
+            material.SetFloat(_EdgeFeather, edgeClipFade);
         }
         //------------------------------------------------------
         private void RefreshDirtyMaterial()
@@ -410,12 +542,14 @@ namespace GameApp.UIComponent
             {
                 if(material) material.DisableKeyword("ERASURE_COLOR"); 
             }
+            SetEdgeCliper(this.edgeCliper.x, this.edgeCliper.y, this.edgeCliper.z, this.edgeCliper.w, this.edgeClipFade);
         }
         //------------------------------------------------------
         bool DelayPlay()
         {
+            m_bKeepEndFrameTrigger = false;
             RefreshDirtyMaterial();
-        if (string.IsNullOrEmpty(this.m_strUrl)) return false;
+            if (string.IsNullOrEmpty(this.m_strUrl)) return false;
             if (m_VideoPlayer != null)
             {
                 if (m_LastVideoPlayer != null)
@@ -431,6 +565,10 @@ namespace GameApp.UIComponent
                         m_VideoPlayer = m_LastVideoPlayer;
                         m_LastVideoPlayer = temp;
                         this.SetVerticesDirty();
+
+                        if (m_bKeepEndRePlay) m_VideoPlayer.Seek(0);
+                        m_bKeepEndRePlay = false;
+                        if (m_VideoPlayer.IsPaused()) m_VideoPlayer.Play();
                         return true;
                     }
                 }
@@ -440,18 +578,40 @@ namespace GameApp.UIComponent
                     if (material && !string.IsNullOrEmpty(shaderMarc))
                         material.EnableKeyword(shaderMarc);
                     this.SetVerticesDirty();
+                    if (m_bKeepEndRePlay) m_VideoPlayer.Seek(0);
+                    if (m_VideoPlayer.IsPaused()) m_VideoPlayer.Play();
+                    m_bKeepEndRePlay = false;
                     return true;
                 }
                 BackupLastVideo();
                 //     VideoController.StopVideo(m_VideoPlayer);
             }
+            else
+            {
+                if(m_LastVideoPlayer!=null)
+                {
+                    if (m_LastVideoPlayer.GetVideoPath().CompareTo(this.m_strUrl) == 0)
+                    {
+                        string shaderMarc = VideoController.GetMaterialDefines();
+                        if (material && !string.IsNullOrEmpty(shaderMarc))
+                            material.EnableKeyword(shaderMarc);
 
+                        var temp = m_VideoPlayer;
+                        m_VideoPlayer = m_LastVideoPlayer;
+                        m_LastVideoPlayer = temp;
+                        this.SetVerticesDirty();
+
+                        if (m_bKeepEndRePlay) m_VideoPlayer.Seek(0);
+                        m_bKeepEndRePlay = false;
+                        if (m_VideoPlayer.IsPaused()) m_VideoPlayer.Play();
+                        return true;
+                    }
+                }
+            }
+            m_bKeepEndRePlay = false;
+            m_TriggerEventFlags = 0;
             m_fAlphaTime = ALPHA_TIME;
             m_fDelayPlay = -1.0f;
-            if (m_LastVideoPlayer == null || m_LastVideoPlayer.GetTextureFrameCount() <= 1)
-            {
-                //! TODO...
-            }
 
             if (m_VideoPlayer == null)
             {
@@ -462,6 +622,13 @@ namespace GameApp.UIComponent
                 erasureColor.a = 0.0f;
 #endif
             }
+
+            //! 如果之前的视频有缓存，且有画面，则不淡入
+            if(m_LastVideoPlayer!=null && m_LastVideoPlayer.GetTextureFrameCount()>2 && m_LastVideoPlayer.GetTexture() != null)
+            {
+                erasureColor.a = 1.0f;
+            }
+
             this.color = erasureColor;
             if (defaultShow)
             {
@@ -484,6 +651,7 @@ namespace GameApp.UIComponent
             {
                 if (m_pCallback != null) m_pCallback(MediaPlayerEvent.EventType.Error);
                 m_pCallback = null;
+                m_pEventCallback = null;
             }
             return false;
         }
@@ -516,30 +684,60 @@ namespace GameApp.UIComponent
                 {
                     VideoController.StopVideo(m_LastVideoPlayer);
                     m_LastVideoPlayer = null;
+                    m_LastEraserParam.Clear();
+                    RefreshDirtyMaterial();
                 }
             }
             if (m_LastVideoPlayer != null)
             {
-                SyncTexture(m_LastVideoPlayer);
+                SyncTexture(m_LastVideoPlayer,1, true);
                 return;
             }
             if (m_VideoPlayer == null) return;
             SyncTexture(m_VideoPlayer);
+
+            //! 记录当前播放视频的抠色参数
+            BackupEraserParam();
             //    if (m_VideoPlayer.IsFinished())
             //       Hide();
         }
         //------------------------------------------------------
-        public void SyncTexture(IMediaPlayer player, float alphaFactor = 1)
+        public void SyncTexture(IMediaPlayer player, float alphaFactor = 1, bool bLast  =false)
         {
-            if(bKeylightErasure)
+            if (bLast)
             {
-                m_KeyLight.Initialize();
-                m_KeyLight.Process(player.GetTexture(), this);
+                if (m_LastEraserParam.eraserType == 2)
+                {
+                    //! 上一个视频使用keylight抠色，确保禁用颜色抠色keyword，避免shader对已处理的keylight输出再次抠色
+                    if (material) material.DisableKeyword("ERASURE_COLOR");
+                    this.texture = m_KeyLight.GetCurrentOutput();
+                }
+                else if (m_LastEraserParam.eraserType == 1)
+                {
+                    UpdateLastMaterialParams();
+                    if (material) material.EnableKeyword("ERASURE_COLOR");
+                    this.texture = player.GetTexture();
+                }
+                else
+                {
+                    //! 上一个视频无抠色，确保禁用颜色抠色keyword
+                    if (material) material.DisableKeyword("ERASURE_COLOR");
+                    this.texture = player.GetTexture();
+                }
             }
             else
             {
-                this.texture = player.GetTexture();
+                if (bKeylightErasure)
+                {
+                    m_KeyLight.Initialize();
+                    m_KeyLight.Process(player.GetTexture(), this);
+                }
+                else
+                {
+                    this.texture = player.GetTexture();
+                }
             }
+
             if (this.texture == null || player.GetTextureFrameCount() <= 2)
             {
                 erasureColor.a = 0;
@@ -561,7 +759,19 @@ namespace GameApp.UIComponent
                         }
                     }
                     erasureColor.a = Mathf.Lerp(erasureColor.a, player.GetAlhpa(true) * alphaFactor, factor);
-                    var colorTemp = erasureColor;
+                    //! 显示上一个视频时，使用上一个视频的抠色颜色作为顶点色，避免新旧视频抠色参数不同导致闪帧
+                    Color colorTemp;
+                    if (bLast)
+                    {
+                        if (m_LastEraserParam.eraserType == 1)
+                            colorTemp = new Color(m_LastEraserParam.erasureColor.r, m_LastEraserParam.erasureColor.g, m_LastEraserParam.erasureColor.b, erasureColor.a);
+                        else
+                            colorTemp = new Color(1f, 1f, 1f, erasureColor.a);
+                    }
+                    else
+                    {
+                        colorTemp = erasureColor;
+                    }
                     colorTemp.a *= m_fAlphaFade;
                     this.color = colorTemp;
                 }
@@ -571,15 +781,73 @@ namespace GameApp.UIComponent
                 }
                 else
                 {
-                    var color = this.color;
-                    color.a = erasureColor.a* m_fAlphaFade;
-                    this.color = color;
+                    //! 显示上一个视频时，保持正确的顶点色RGB
+                    if (bLast)
+                    {
+                        Color color;
+                        if (m_LastEraserParam.eraserType == 1)
+                            color = new Color(m_LastEraserParam.erasureColor.r, m_LastEraserParam.erasureColor.g, m_LastEraserParam.erasureColor.b, erasureColor.a * m_fAlphaFade);
+                        else
+                            color = new Color(1f, 1f, 1f, erasureColor.a * m_fAlphaFade);
+                        this.color = color;
+                    }
+                    else
+                    {
+                        var color = this.color;
+                        color.a = erasureColor.a* m_fAlphaFade;
+                        this.color = color;
+                    }
                 }
             }
 
             if (this.autoNativeSize && this.texture)
             {
                 this.SetNativeSize();
+            }
+
+            if(!m_bKeepEndFrameTrigger && this.keepEndFrame && !this.bLoop && m_LastVideoPlayer==null)
+            {
+                var duration = this.m_VideoPlayer.GetDurationMs();
+                if (duration>0 && this.m_VideoPlayer.GetCurrentTimeMs() >= (duration - Time.fixedDeltaTime*1000))
+                {
+                    m_bKeepEndFrameTrigger = true;
+                    //! 保留最后一帧画面：暂停播放器，使纹理停留在最后一帧
+                    this.m_VideoPlayer.Pause();
+#if USE_DEBUG
+                    Debug.LogFormat("{0} 视频停止到最后一帧", m_strUrl);
+#endif
+                    if (m_pCallback != null) m_pCallback(MediaPlayerEvent.EventType.KeepEndFrame);
+                }
+            }
+
+            if (m_pEventCallback!=null && this.triggerEvents != null && this.triggerEvents.Length > 0)
+            {
+                var duration = this.m_VideoPlayer.GetDurationMs();
+                if(duration>0)
+                {
+                    float curTime = this.m_VideoPlayer.GetCurrentTimeMs();
+                    if(curTime<= Time.fixedDeltaTime*1000)
+                    {
+                        m_TriggerEventFlags = 0;
+                    }
+                    for (int i = 0; i < this.triggerEvents.Length; i++)
+                    {
+                        bool bTrigged = (m_TriggerEventFlags & (1u << i)) != 0;
+                        if (bTrigged) continue;
+                        var eventData = this.triggerEvents[i];
+                        var time = eventData.time * 1000.0f;
+                        if(curTime >= time)
+                        {
+                            m_TriggerEventFlags |= (1u << i);
+                            if (string.IsNullOrEmpty(eventData.strValue)) continue;
+                            if (m_pEventCallback == null) break;
+                            m_pEventCallback(eventData.strValue);
+#if USE_DEBUG
+                            Debug.LogFormat("视频事件:{0}", (eventData.strValue == null?"":eventData.strValue));
+#endif
+                        }
+                    }
+                }    
             }
         }
     }
@@ -588,329 +856,30 @@ namespace GameApp.UIComponent
     [UnityEditor.CustomEditor(typeof(UIVideo))]
     public class UIVideoEditor : UnityEditor.Editor
     {
-        private float m_fAlphaFadeTest = 1;
-        KeylightEffectEditor m_pKeylight = new KeylightEffectEditor();
-        public void OnEnable()
-        {
-            UIVideo video = target as UIVideo;
-            m_pKeylight.OnEnable(target, serializedObject,"m_KeyLight");
-            video.SetAllDirty();
-        }
-        public void OnDisable()
-        {
-            if (!Application.isPlaying)
-                VideoController.Instance.Destroy();
-        }
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
             UIVideo video = target as UIVideo;
-            EditorGUI.BeginChangeCheck();
-            video.autoNativeSize = UnityEditor.EditorGUILayout.Toggle("自适应视频大小", video.autoNativeSize);
-            video.disableDontStop = UnityEditor.EditorGUILayout.Toggle("隐藏时不停止播放", video.disableDontStop);
-            video.defaultShow = (Graphic)UnityEditor.EditorGUILayout.ObjectField(new GUIContent("缺省显示", "当视频播放失败，或者正在加载时，显示"), video.defaultShow, typeof(Graphic), true);
-            video.bPersistentPath = UnityEditor.EditorGUILayout.Toggle("缓存模式", video.bPersistentPath);
-            EditorGUILayout.BeginHorizontal();
-            string tips = video.bPersistentPath ? "" : "视频放到StreamingAssets目录下,配置时不要包含StreamingAssets/";
-            video.url = UnityEditor.EditorGUILayout.TextField(new GUIContent("视频路径", tips), video.url);
-            if (GUILayout.Button("...", new GUILayoutOption[] { GUILayout.Width(20) }))
+
+            // 显示基本信息
+            EditorGUILayout.LabelField("视频路径", video.url ?? "(无)");
+            string erasureInfo = "无";
+            if (video.bErasure && !video.bKeylightErasure) erasureInfo = "常规抠色";
+            else if (video.bKeylightErasure) erasureInfo = "Keylight抠色";
+            EditorGUILayout.LabelField("抠色方式", erasureInfo);
+            EditorGUILayout.LabelField("循环", video.bLoop ? "是" : "否");
+
+            EditorGUILayout.Space(5);
+
+            // 打开编辑器按钮
+            if (GUILayout.Button("打开视频编辑器", GUILayout.Height(30)))
             {
-                string path = UnityEditor.EditorUtility.OpenFilePanel("选择视频", Application.streamingAssetsPath, "mp4,avi,mov,wmv,flv,mkv,webm");
-                if (!string.IsNullOrEmpty(path))
-                {
-                    if (path.StartsWith(Application.streamingAssetsPath))
-                    {
-                        path = path.Substring(Application.streamingAssetsPath.Length + 1);
-                        video.url = path;
-                        video.StartVideo();
-                    }
-                    else
-                    {
-                        if (SceneView.lastActiveSceneView)
-                            SceneView.lastActiveSceneView.ShowNotification(new GUIContent("视频放到StreamingAssets目录下,配置时不要包含StreamingAssets/"), 3.0f);
-                    }
-                }
-            }
-            if (!Application.isPlaying)
-            {
-                if (!string.IsNullOrEmpty(video.url) && GUILayout.Button(video.IsPlaying() ? "停止" : "预览", new GUILayoutOption[] { GUILayout.Width(50) }))
-                {
-                    if (video.IsPlaying())
-                    {
-                        video.Stop();
-                    }
-                    else
-                    {
-                        VideoController.Instance.Init();
-                        video.Stop();
-                        video.Play(video.url, video.bPersistentPath, video.bLoop);
-                    }
-                }
+                UIVideoEditorWindow.OpenWithUIVideo(video);
             }
 
-            var materialProp = serializedObject.FindProperty("m_Material");
-
-            EditorGUILayout.EndHorizontal();
-            video.bLoop = UnityEditor.EditorGUILayout.Toggle("循环", video.bLoop);
-            UnityEditor.EditorGUI.BeginChangeCheck();
-            video.bKeylightErasure = UnityEditor.EditorGUILayout.Toggle("抠色-Keylight", video.bKeylightErasure);
-            if (video.bKeylightErasure)
-            {
-                video.bErasure = false;
-            }
-            if (video.bKeylightErasure)
-            {
-                m_pKeylight.OnInspectorGUI();
-                serializedObject.ApplyModifiedProperties();
-                if (video.material)video.material.DisableKeyword("ERASURE_COLOR");
-            }
-            else
-            {
-                video.bErasure = UnityEditor.EditorGUILayout.Toggle("抠色", video.bErasure);
-                if (video.bErasure)
-                {
-                    if(video.material)video.material.EnableKeyword("ERASURE_COLOR");
-                    EditorGUI.indentLevel++;
-                    video.erasureColor = UnityEditor.EditorGUILayout.ColorField("绿幕色", video.erasureColor);
-                    //    video.erasureColor.a = 0.0f;
-                    video.color = new Color(video.erasureColor.r, video.erasureColor.g, video.erasureColor.b, video.color.a);
-                    if (video.material)
-                    {
-                        if (video.material.shader.name != "UI/UI_Video")
-                        {
-                            UnityEditor.EditorGUILayout.HelpBox("使用UI/UI_Video shader 可进行抠色哦！", MessageType.Warning, true);
-                        }
-                    }
-                    var useCustomParams = serializedObject.FindProperty("useCustomParams");
-                    if (useCustomParams != null)
-                    {
-                        bool preBool = useCustomParams.boolValue;
-                        EditorGUILayout.PropertyField(useCustomParams, new GUIContent("使用自定义参数"));
-                        if (useCustomParams.boolValue)
-                        {
-                            EditorGUI.BeginChangeCheck();
-                            var colorCutoff = serializedObject.FindProperty("colorCutoff");
-                            if (colorCutoff != null) EditorGUILayout.PropertyField(colorCutoff, new GUIContent("图像阈值"));
-                            var colorFeathering = serializedObject.FindProperty("colorFeathering");
-                            if (colorFeathering != null) EditorGUILayout.PropertyField(colorFeathering, new GUIContent("图像羽化"));
-                            var maskFeathering = serializedObject.FindProperty("maskFeathering");
-                            if (maskFeathering != null) EditorGUILayout.PropertyField(maskFeathering, new GUIContent("抠色羽化"));
-                            var despill = serializedObject.FindProperty("despill");
-                            if (despill != null) EditorGUILayout.PropertyField(despill, new GUIContent("滤镜强度"));
-                            var despillLuminanceAdd = serializedObject.FindProperty("despillLuminanceAdd");
-                            if (despillLuminanceAdd != null) EditorGUILayout.PropertyField(despillLuminanceAdd, new GUIContent("滤镜亮度增强"));
-                            if (EditorGUI.EndChangeCheck() || !preBool)
-                            {
-                                if (colorCutoff != null) video.SetColorCutoff(colorCutoff.floatValue);
-                                if (colorFeathering != null) video.SetColorFeathering(colorFeathering.floatValue);
-                                if (maskFeathering != null) video.SetMaskFeathering(maskFeathering.floatValue);
-                                if (despillLuminanceAdd != null && despill != null) video.SetDespill(despill.floatValue, despillLuminanceAdd.floatValue);
-                            }
-                        }
-                        else
-                        {
-                            video.DestroyNewMaterial();
-                            materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo_Erasure.mat");
-                            video.material = materialProp.objectReferenceValue as Material;
-                        }
-                        serializedObject.ApplyModifiedProperties();
-                    }
-                    EditorGUI.indentLevel--;
-                }
-            }
-
-            if (UnityEditor.EditorGUI.EndChangeCheck())
-            {
-                if (video.bErasure && !video.bKeylightErasure)
-                {
-                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo_Erasure.mat");
-                }
-                else
-                {
-                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo.mat");
-                }
-            }
-
-            if (materialProp != null) EditorGUILayout.PropertyField(materialProp, new GUIContent("默认材质"));
-
-            EditorGUILayout.ObjectField("当前材质:", video.material, typeof(Material), false);
-            video.delayPlay = UnityEditor.EditorGUILayout.FloatField("延迟播放", video.delayPlay);
-            video.raycastTarget = UnityEditor.EditorGUILayout.Toggle("射线检测", video.raycastTarget);
-
-
-            if (EditorGUI.EndChangeCheck())
-            {
-                string shaderDefines = VideoController.GetMaterialDefines();
-                if (video.material && !string.IsNullOrEmpty(shaderDefines))
-                    video.material.EnableKeyword(shaderDefines);
-                video.SetVerticesDirty();
-                video.SetMaterialDirty();
-                EditorUtility.SetDirty(target);
-            }
-            EditorGUI.BeginChangeCheck();
-            m_fAlphaFadeTest = UnityEditor.EditorGUILayout.Slider("Video Alpha Test", m_fAlphaFadeTest, 0, 1);
-            if(UnityEditor.EditorGUI.EndChangeCheck())
-            {
-                video.SetAlphaFade(m_fAlphaFadeTest);
-            }
-        //    serializedObject.ApplyModifiedProperties();
-            if (GUILayout.Button("说明文档"))
-            {
-                Application.OpenURL("https://docs.qq.com/doc/DTG56eEVmd0pqcnVN");
-            }
-            if (GUILayout.Button("复制表格配置参数-带表头"))
-            {
-                //! 表头
-                string head = "ErasureType";
-                head += "\tColor";
-                head += "\tCutoff";
-                head += "\tColorFeathering";
-                head += "\tMaskFeathering";
-                head += "\tScreenGain";
-                head += "\tScreenBlance";
-                head += "\tScreenPreBlur";
-                head += "\tClipBlack";
-                head += "\tClipWhite";
-                head += "\tScreenShrinkGrow";
-                head += "\tScreenSoftness";
-                head += "\tSpillSuppression";
-                head += "\tSpillTolerance";
-                head += "\tSpillDesaturate";
-                head += "\tSpillRange";
-                head += "\tSpillColorCorrection";
-                head += "\tLumaCorrection\r\n";
-
-                //!数据类型
-                head += "\"Enum\n常规:Standard:1\nKeylight:Keylight:2\"";
-                head += "\tstring";
-                head += "\tint";
-                head += "\tint";
-                head += "\tint";
-                head += "\tint";
-                head += "\tint";
-                head += "\tint";
-                head += "\tint";
-                head += "\tint";
-                head += "\tint";
-                head += "\tint";
-                head += "\tint";
-                head += "\tint";
-                head += "\tint";
-                head += "\tint";
-                head += "\tint";
-                head += "\tint\r\n";
-
-                //!描述
-                head += "抠图方法类型";
-                head += "\t抠图颜色";
-                head += "\t常规抠图有效，图像颜色与抠图颜色的差异度阈值";
-                head += "\t常规抠图有效，图像颜色与抠图颜色的差异度羽化范围";
-                head += "\t常规抠图有效，抠色区域边缘羽化范围";
-                head += "\tKeylight有效，屏幕增益";
-                head += "\tKeylight有效，屏幕平衡";
-                head += "\tKeylight有效，屏幕预模糊";
-                head += "\tKeylight有效，黑色裁剪";
-                head += "\tKeylight有效，白色裁剪";
-                head += "\tKeylight有效，收缩/扩展";
-                head += "\tKeylight有效，边缘柔化";
-                head += "\tKeylight有效，溢色抑制";
-                head += "\tKeylight有效，溢色容差";
-                head += "\tKeylight有效，溢色去饱和";
-                head += "\tKeylight有效，溢色范围";
-                head += "\tKeylight有效，溢色颜色校正";
-                head += "\tKeylight有效，亮度校正\r\n";
-
-                //!属性
-                // head += (video.bKeylightErasure ? "2" : "1");
-                head += GetKeylightErasureString(video.bKeylightErasure);
-                if(video.bKeylightErasure) head += "\t#" + ColorUtility.ToHtmlStringRGB(m_pKeylight.Effect.screenColor);
-                else head += "\t#" + ColorUtility.ToHtmlStringRGB(video.erasureColor);
-
-                var colorCutoff = serializedObject.FindProperty("colorCutoff");
-                if (colorCutoff != null) head += "\t" + FloatToPercentString(colorCutoff.floatValue);
-                else head += "\t-1";
-
-                var colorFeathering = serializedObject.FindProperty("colorFeathering");
-                if (colorFeathering != null) head += "\t" + FloatToPercentString(colorFeathering.floatValue);
-                else head += "\t-1";
-
-                var maskFeathering = serializedObject.FindProperty("maskFeathering");
-                if (maskFeathering != null) head += "\t" + FloatToPercentString(maskFeathering.floatValue);
-                else head += "\t-1";
-
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.screenGain);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.screenBalance);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.screenPreBlur);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.clipBlack);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.clipWhite);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.screenShrinkGrow);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.screenSoftness);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.spillSuppression);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.spillTolerance);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.spillDesaturate);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.spillRange);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.spillColorCorrection);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.lumaCorrection);
-
-                EditorGUIUtility.systemCopyBuffer = head;
-            }
-            if (GUILayout.Button("复制表格配置参数"))
-            {
-                //! 表头
-                string head = "";
-                //!属性
-                // head += (video.bKeylightErasure ? "2" : "1");
-                head += GetKeylightErasureString(video.bKeylightErasure);
-                if (video.bKeylightErasure) head += "\t#" + ColorUtility.ToHtmlStringRGB(m_pKeylight.Effect.screenColor);
-                else head += "\t#" + ColorUtility.ToHtmlStringRGB(video.erasureColor);
-
-                var colorCutoff = serializedObject.FindProperty("colorCutoff");
-                if (colorCutoff != null) head += "\t" + FloatToPercentString(colorCutoff.floatValue);
-                else head += "\t-1";
-
-                var colorFeathering = serializedObject.FindProperty("colorFeathering");
-                if (colorFeathering != null) head += "\t" + FloatToPercentString(colorFeathering.floatValue);
-                else head += "\t-1";
-
-                var maskFeathering = serializedObject.FindProperty("maskFeathering");
-                if (maskFeathering != null) head += "\t" + FloatToPercentString(maskFeathering.floatValue);
-                else head += "\t-1";
-
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.screenGain);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.screenBalance);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.screenPreBlur);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.clipBlack);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.clipWhite);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.screenShrinkGrow);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.screenSoftness);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.spillSuppression);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.spillTolerance);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.spillDesaturate);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.spillRange);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.spillColorCorrection);
-                head += "\t" + FloatToPercentString(m_pKeylight.Effect.lumaCorrection);
-
-                EditorGUIUtility.systemCopyBuffer = head;
-            }
-        }
-        //-----------------------------------------------------
-        private string FloatToPercentString(float value)
-        {
-            return ((int)(value * 10000)).ToString();
+            serializedObject.ApplyModifiedProperties();
         }
 
-        private string GetKeylightErasureString(bool keylight)
-        {
-            if (keylight)
-            {
-                return "Keylight";
-            }
-            else
-            {
-                return "常规";
-            }
-        }
-        
         //-----------------------------------------------------
         [MenuItem("GameObject/UI/Video", false, 0)]
         static public void AddVideo(MenuCommand menuCommand)
