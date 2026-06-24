@@ -2,6 +2,7 @@
 using GameApp.Media;
 using GameApp.UIComponent;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
@@ -842,7 +843,7 @@ namespace GameApp.UIComponent
 
             if (GUILayout.Button("说明文档"))
             {
-                string assetPath  =  Framework.ED.EditorUtils.FindScriptFilePath(this.GetType());
+                string assetPath  =  FindScriptFilePath(this.GetType());
                 if(!string.IsNullOrEmpty(assetPath))
                 {
                     string docPath = System.IO.Path.GetFullPath(
@@ -863,7 +864,42 @@ namespace GameApp.UIComponent
             }
             EditorGUILayout.EndVertical();
         }
-
+        //------------------------------------------------------
+        public static string FindScriptFilePath(System.Type classType)
+        {
+            if (classType == null)
+                return "";
+            string[] guids = AssetDatabase.FindAssets($"{classType.Name} t:Script");
+            string filePath = null;
+            if (guids.Length == 1)
+            {
+                filePath = AssetDatabase.GUIDToAssetPath(guids[0]);
+            }
+            else
+            {
+                foreach (var g in guids)
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(g);
+                    if (string.IsNullOrEmpty(path) || !path.EndsWith(".cs"))
+                        continue;
+                    var lines = System.IO.File.ReadAllLines(path);
+                    foreach (var line in lines)
+                    {
+                        if (line.Contains($"class {classType.Name}") || line.Contains($"struct {classType.Name}"))
+                        {
+                            if (string.IsNullOrEmpty(classType.Namespace) || lines.Any(l => l.Contains($"namespace {classType.Namespace}")))
+                            {
+                                filePath = path;
+                                break;
+                            }
+                        }
+                    }
+                    if (filePath != null)
+                        break;
+                }
+            }
+            return filePath;
+        }
         //------------------------------------------------------
         /// <summary>
         /// 处理视频路径选择逻辑：
