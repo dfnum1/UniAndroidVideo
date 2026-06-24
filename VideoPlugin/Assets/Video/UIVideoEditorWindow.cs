@@ -2,7 +2,6 @@
 using GameApp.Media;
 using GameApp.UIComponent;
 using System.IO;
-using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
@@ -51,6 +50,7 @@ namespace GameApp.UIComponent
         private bool m_bExpandPlayback = false;
         private bool m_bExpandErasure = false;
         private bool m_bExpandEdgeClip = false;
+        private bool m_bExpandEvent = false;
 
         // EditorPrefs keys
         private const string PREF_LAST_VIDEO_DIR = "UIVideoEditor_LastVideoDir";
@@ -293,11 +293,11 @@ namespace GameApp.UIComponent
 
                     // 绘制视频内容
                     Material previewMat = m_TargetVideo.material;
+                    if(previewMat && !string.IsNullOrEmpty(VideoController.GetMaterialDefines()))
+                        previewMat.EnableKeyword(VideoController.GetMaterialDefines());
+
                     if (previewMat != null && m_ErasureType != EErasureType.eNone)
                     {
-                        if (!string.IsNullOrEmpty(VideoController.GetMaterialDefines()))
-                            previewMat.EnableKeyword(VideoController.GetMaterialDefines());
-
                         Color vtxColor = (m_ErasureType == EErasureType.eNormal) ? m_TargetVideo.erasureColor : Color.white;
                         vtxColor.a = 1f;
 
@@ -518,12 +518,27 @@ namespace GameApp.UIComponent
             EditorGUILayout.Space(3);
             DrawEdgeClipSection();
             EditorGUILayout.Space(3);
+            DrawEvents();
+            EditorGUILayout.Space(3);
             DrawToolsSection();
+
 
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
         }
-
+        //------------------------------------------------------
+        void DrawEvents()
+        {
+            m_bExpandEvent = EditorGUILayout.Foldout(m_bExpandEvent, "事件回调");
+            if (m_bExpandEvent)
+            {
+                EditorGUILayout.BeginVertical("box");
+                var triggerEvents = m_SerializedTarget.FindProperty("triggerEvents");
+                if (triggerEvents != null) EditorGUILayout.PropertyField(triggerEvents, new GUIContent("触发事件"));
+                EditorGUILayout.EndVertical();
+            }
+        //    EditorGUILayout.EndFoldoutHeaderGroup();
+        }
         //------------------------------------------------------
         void DrawPlaybackSection()
         {
@@ -531,6 +546,23 @@ namespace GameApp.UIComponent
             if (m_bExpandPlayback)
             {
                 EditorGUILayout.BeginVertical("box");
+
+                if(m_ErasureType == EErasureType.eNone)
+                {
+                    var mColor = m_SerializedTarget.FindProperty("erasureColor");
+                    if (mColor != null) EditorGUILayout.PropertyField(mColor, new GUIContent("顶点色"));
+                }
+
+                var preUsePop = m_SerializedTarget.FindProperty("preUse");
+                if (preUsePop != null)
+                {
+                    bool preVal = preUsePop.boolValue;
+                    EditorGUILayout.PropertyField(preUsePop, new GUIContent("预使用"));
+                    if(preVal != preUsePop.boolValue)
+                    {
+                        UpdateMaterial();
+                    }
+                }
 
                 var autoNativeSize = m_SerializedTarget.FindProperty("autoNativeSize");
                 if (autoNativeSize != null) EditorGUILayout.PropertyField(autoNativeSize, new GUIContent("自适应视频大小"));
@@ -540,6 +572,10 @@ namespace GameApp.UIComponent
 
                 var bPersistentPath = m_SerializedTarget.FindProperty("bPersistentPath");
                 if (bPersistentPath != null) EditorGUILayout.PropertyField(bPersistentPath, new GUIContent("缓存模式"));
+
+                var mMaterial = m_SerializedTarget.FindProperty("m_Material");
+                if (mMaterial != null) EditorGUILayout.PropertyField(mMaterial, new GUIContent("使用材质"));
+
 
                 // 视频路径
                 EditorGUILayout.BeginHorizontal();
@@ -629,7 +665,46 @@ namespace GameApp.UIComponent
             }
             EditorGUILayout.EndFoldoutHeaderGroup();
         }
-
+        //------------------------------------------------------
+        void UpdateMaterial()
+        {
+            var bErasure = m_SerializedTarget.FindProperty("bErasure");
+            var bKeylightErasure = m_SerializedTarget.FindProperty("bKeylightErasure");
+            var materialProp = m_SerializedTarget.FindProperty("m_Material");
+            var preUse = m_SerializedTarget.FindProperty("preUse");
+            if (m_ErasureType == EErasureType.eNormal)
+            {
+                bKeylightErasure.boolValue = false;
+                bErasure.boolValue = true;
+                if (preUse.boolValue)
+                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/PreRes/Videos/PreUIVideo_Erasure.mat");
+                else
+                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo_Erasure.mat");
+                if (m_TargetVideo.material) m_TargetVideo.material.EnableKeyword("ERASURE_COLOR");
+            }
+            else if (m_ErasureType == EErasureType.eKeylight)
+            {
+                bKeylightErasure.boolValue = true;
+                bErasure.boolValue = false;
+                if (preUse.boolValue)
+                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/PreRes/Videos/PreUIVideo.mat");
+                else
+                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo.mat");
+                if (m_TargetVideo.material) m_TargetVideo.material.DisableKeyword("ERASURE_COLOR");
+            }
+            else
+            {
+                bKeylightErasure.boolValue = false;
+                bErasure.boolValue = false;
+                if (preUse.boolValue)
+                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/PreRes/Videos/PreUIVideo.mat");
+                else
+                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo.mat");
+                if (m_TargetVideo.material) m_TargetVideo.material.DisableKeyword("ERASURE_COLOR");
+            }
+            m_TargetVideo.DestroyNewMaterial();
+            EditorUtility.SetDirty(m_TargetVideo);
+        }
         //------------------------------------------------------
         void DrawErasureSection()
         {
@@ -641,35 +716,14 @@ namespace GameApp.UIComponent
                 var bErasure = m_SerializedTarget.FindProperty("bErasure");
                 var bKeylightErasure = m_SerializedTarget.FindProperty("bKeylightErasure");
                 var materialProp = m_SerializedTarget.FindProperty("m_Material");
+                var preUse = m_SerializedTarget.FindProperty("preUse");
 
                 EErasureType lastType = m_ErasureType;
                 m_ErasureType = (EErasureType)EditorGUILayout.IntPopup("抠色方式", (int)m_ErasureType, ErasurePOP, ErasurePOPIndex);
 
                 if (m_ErasureType != lastType)
                 {
-                    if (m_ErasureType == EErasureType.eNormal)
-                    {
-                        bKeylightErasure.boolValue = false;
-                        bErasure.boolValue = true;
-                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo_Erasure.mat");
-                        if (m_TargetVideo.material) m_TargetVideo.material.EnableKeyword("ERASURE_COLOR");
-                    }
-                    else if (m_ErasureType == EErasureType.eKeylight)
-                    {
-                        bKeylightErasure.boolValue = true;
-                        bErasure.boolValue = false;
-                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo.mat");
-                        if (m_TargetVideo.material) m_TargetVideo.material.DisableKeyword("ERASURE_COLOR");
-                    }
-                    else
-                    {
-                        bKeylightErasure.boolValue = false;
-                        bErasure.boolValue = false;
-                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo.mat");
-                        if (m_TargetVideo.material) m_TargetVideo.material.DisableKeyword("ERASURE_COLOR");
-                    }
-                    m_TargetVideo.DestroyNewMaterial();
-                    EditorUtility.SetDirty(m_TargetVideo);
+                    UpdateMaterial();
                 }
 
                 if (m_ErasureType == EErasureType.eKeylight)
@@ -788,7 +842,7 @@ namespace GameApp.UIComponent
 
             if (GUILayout.Button("说明文档"))
             {
-                string assetPath  = FindScriptFilePath(this.GetType());
+                string assetPath  =  Framework.ED.EditorUtils.FindScriptFilePath(this.GetType());
                 if(!string.IsNullOrEmpty(assetPath))
                 {
                     string docPath = System.IO.Path.GetFullPath(
@@ -809,42 +863,7 @@ namespace GameApp.UIComponent
             }
             EditorGUILayout.EndVertical();
         }
-        //------------------------------------------------------
-        static string FindScriptFilePath(System.Type classType)
-        {
-            if (classType == null)
-                return "";
-            string[] guids = AssetDatabase.FindAssets($"{classType.Name} t:Script");
-            string filePath = null;
-            if (guids.Length == 1)
-            {
-                filePath = AssetDatabase.GUIDToAssetPath(guids[0]);
-            }
-            else
-            {
-                foreach (var g in guids)
-                {
-                    string path = AssetDatabase.GUIDToAssetPath(g);
-                    if (string.IsNullOrEmpty(path) || !path.EndsWith(".cs"))
-                        continue;
-                    var lines = System.IO.File.ReadAllLines(path);
-                    foreach (var line in lines)
-                    {
-                        if (line.Contains($"class {classType.Name}") || line.Contains($"struct {classType.Name}"))
-                        {
-                            if (string.IsNullOrEmpty(classType.Namespace) || lines.Any(l => l.Contains($"namespace {classType.Namespace}")))
-                            {
-                                filePath = path;
-                                break;
-                            }
-                        }
-                    }
-                    if (filePath != null)
-                        break;
-                }
-            }
-            return filePath;
-        }
+
         //------------------------------------------------------
         /// <summary>
         /// 处理视频路径选择逻辑：
@@ -1010,20 +1029,28 @@ namespace GameApp.UIComponent
                 var bErasure = m_SerializedTarget.FindProperty("bErasure");
                 var bKeylightErasure = m_SerializedTarget.FindProperty("bKeylightErasure");
                 var materialProp = m_SerializedTarget.FindProperty("m_Material");
+                var preUse = m_SerializedTarget.FindProperty("preUse");
 
                 if (typeStr == "Keylight")
                 {
                     m_ErasureType = EErasureType.eKeylight;
                     bKeylightErasure.boolValue = true;
                     bErasure.boolValue = false;
-                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo.mat");
+
+                    if(preUse.boolValue)
+                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/PreRes/Videos/PreUIVideo.mat");
+                    else
+                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo.mat");
                 }
                 else
                 {
                     m_ErasureType = EErasureType.eNormal;
                     bKeylightErasure.boolValue = false;
                     bErasure.boolValue = true;
-                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo_Erasure.mat");
+                    if (preUse.boolValue)
+                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/PreRes/Videos/PreUIVideo_Erasure.mat");
+                    else
+                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo_Erasure.mat");
                 }
 
                 // [1] 颜色 (#RRGGBB)

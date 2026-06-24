@@ -2,9 +2,13 @@ using GameApp.UIComponent;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class NewBehaviourScript : MonoBehaviour
 {
+    public Text videoText1;
+    public Text videoText2;
+
     public UIVideo video1;
     public UIVideo video2;
     string[] videos =
@@ -42,7 +46,16 @@ public class NewBehaviourScript : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        
+
+        if (video1 != null && videoText1)
+        {
+            videoText1.text = video1.GetCurTime() + "/" + video1.GetDuration();
+        }
+
+        if (video2 != null && videoText2)
+        {
+            videoText2.text = video2.GetCurTime() + "/" + video2.GetDuration();
+        }
     }
 
     public void Stop()

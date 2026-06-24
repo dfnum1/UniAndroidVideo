@@ -272,6 +272,12 @@ namespace GameApp.UIComponent
             return 0;
         }
         //------------------------------------------------------
+        public float GetCurTime()
+        {
+            if (m_VideoPlayer != null) return m_VideoPlayer.GetCurrentTimeMs() / 1000.0f;
+            return 0;
+        }
+        //------------------------------------------------------
         public bool IsPlaying()
         {
             if (m_VideoPlayer != null) return m_VideoPlayer.IsPlaying();
@@ -820,6 +826,9 @@ namespace GameApp.UIComponent
                 }
             }
 
+            float duraiton = this.m_VideoPlayer.GetDurationMs();
+            float curTime1 = this.m_VideoPlayer.GetCurrentTimeMs();
+            Debug.Log("CurTime:" + curTime1 + "    Duration:" + duraiton);
             if (m_pEventCallback!=null && this.triggerEvents != null && this.triggerEvents.Length > 0)
             {
                 var duration = this.m_VideoPlayer.GetDurationMs();
@@ -868,6 +877,23 @@ namespace GameApp.UIComponent
             else if (video.bKeylightErasure) erasureInfo = "Keylight抠色";
             EditorGUILayout.LabelField("抠色方式", erasureInfo);
             EditorGUILayout.LabelField("循环", video.bLoop ? "是" : "否");
+            EditorGUILayout.ColorField("erasureColor", video.erasureColor);
+
+            var preUsePop = this.serializedObject.FindProperty("preUse");
+            if(preUsePop!=null)
+            {
+                EditorGUILayout.PropertyField(preUsePop, new GUIContent("预使用"));
+            }
+
+            if (GUILayout.Button("一键不抠色"))
+            {
+                video.erasureColor = Color.white;
+                video.DisableErasure();
+            }
+
+            var mat = EditorGUILayout.ObjectField("材质", video.material, typeof(Material), false);
+            if (mat) video.material = mat as Material;
+            else video.material = null;
 
             EditorGUILayout.Space(5);
 

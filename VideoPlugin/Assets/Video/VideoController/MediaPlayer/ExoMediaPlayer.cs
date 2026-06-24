@@ -536,7 +536,7 @@ namespace GameApp.Media
 			float result = 0.0f;
 			if (m_Video != null)
 			{
-				result = (float)(m_Video.Call<double>("GetPlaybackPosition")*1000);
+				result = (float)(m_Video.Call<double>("GetPlaybackPosition")*GetDurationMs());
 			}
 			return result;
 		}
@@ -984,9 +984,9 @@ namespace GameApp.Media
                     m_TextureHandle = textureHandle;
                 }
 
-                if ( m_DurationMs == 0.0f )
+                if ( m_DurationMs <= 1000.0f )
 				{
-					m_DurationMs = (float)(m_Video.Call<long>("GetLength")*1000);
+					m_DurationMs = (float)(m_Video.Call<long>("GetLength"));
 //					if( m_DurationMs > 0.0f ) { Helper.LogInfo("Duration: " + m_DurationMs); }
 				}
 			}
