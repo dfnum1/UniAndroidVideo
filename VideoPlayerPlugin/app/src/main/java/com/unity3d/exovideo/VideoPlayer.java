@@ -146,7 +146,7 @@ public class VideoPlayer {
 
     public void Prepare(Surface surface) {
         // send videoID and textureID back to unity to create external texture
-
+        duration = 0;
         mySurface = surface;
 
         // 1. AudioEngine
@@ -235,6 +235,11 @@ public class VideoPlayer {
         }
 
         @Override
+        public void onSeekProcessed() {
+            updatePlaybackState();
+        }
+
+        @Override
         public void onPlayerErrorChanged(PlaybackException error) {
             if (error != null) {
                 Log.e(TAG, "ExoPlayer Error: " + error.getMessage());
@@ -304,6 +309,11 @@ public class VideoPlayer {
 
         @Override
         public void onTimelineChanged(Timeline timeline, int reason) {
+            // Timeline 就绪后更新 duration，此时 getDuration() 才能返回正确值
+            long newDuration = exoPlayer.getDuration();
+            if (newDuration > 0 && newDuration != C.TIME_UNSET) {
+                duration = newDuration;
+            }
         }
 
         @Override
@@ -398,7 +408,10 @@ public class VideoPlayer {
     }
 
     public void updatePlaybackState() {
-        duration = exoPlayer.getDuration();
+        long newDuration = exoPlayer.getDuration();
+        if (newDuration > 0 && newDuration != C.TIME_UNSET) {
+            duration = newDuration;
+        }
         lastPlaybackPosition = exoPlayer.getCurrentPosition();
         lastPlaybackSpeed = isPlaying ? exoPlayer.getPlaybackParameters().speed : 0;
         lastPlaybackUpdateTime = System.currentTimeMillis();
@@ -491,6 +504,9 @@ public class VideoPlayer {
     }
 
     public double GetPlaybackPosition() {
+        if (duration <= 0) {
+            return 0;
+        }
         long currPosition = Math.max(0, Math.min(duration, lastPlaybackPosition
                 + (long) ((System.currentTimeMillis() - lastPlaybackUpdateTime) * lastPlaybackSpeed)));
         double percent = (double) currPosition / duration;
