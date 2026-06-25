@@ -263,6 +263,11 @@ namespace GameApp.Media
             m_AutoStart = bAuto;
         }
         //-------------------------------------------------
+        public void SetDuration(float time)
+        {
+            m_DurationMs = time;
+        }
+        //-------------------------------------------------
         public bool IsPrepared()
         {
 			return IsBuffering();

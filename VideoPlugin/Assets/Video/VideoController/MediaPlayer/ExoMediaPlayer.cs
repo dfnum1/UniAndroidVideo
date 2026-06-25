@@ -117,6 +117,9 @@ namespace GameApp.Media
 
         AnimationCurve m_AlphaCurve;
 
+        private float m_lastRenderTime = 0f;
+        private float m_videoFrameInterval = 0.03333f; // 默认为30fps的间
+
         private static void IssuePluginEvent(Native.ExoPlayerEvent type, int param)
         {
             int eventId =((int)type) << 16 | (param<<8|((int)SystemInfo.graphicsDeviceType));
@@ -522,7 +525,7 @@ namespace GameApp.Media
 			{
                 float time = GetDurationMs();
                 if (time <= 0) return;
-				m_Video.Call("SetPlaybackPosition", Mathf.FloorToInt(timeMs)/ time);
+				m_Video.Call("SetPlaybackPosition", (double)(Mathf.FloorToInt(timeMs)/ time));
 			}
 		}
         //-------------------------------------------------
@@ -575,6 +578,11 @@ namespace GameApp.Media
 		{
 			return m_DurationMs;
 		}
+        //-------------------------------------------------
+        public void SetDuration(float time)
+        {
+            m_DurationMs = time;
+        }
         //-------------------------------------------------
         public int GetVideoWidth()
 		{
@@ -889,9 +897,15 @@ namespace GameApp.Media
                 // NOTE: in editor, if the game view isn't visible then WaitForEndOfFrame will never complete
                 yield return wait;
 
-                if (this.enabled)
+                if (this.enabled && IsPlaying())
                 {
-                    Render();
+                    // --- 优化：根据视频帧率限制Render调用 ---
+                    float currentTime = Time.time;
+                    if (currentTime > m_lastRenderTime + m_videoFrameInterval)
+                    {
+                        Render();
+                        m_lastRenderTime = currentTime;
+                    }
                 }
             }
         }
@@ -984,9 +998,15 @@ namespace GameApp.Media
                     m_TextureHandle = textureHandle;
                 }
 
-                if ( m_DurationMs <= 1000.0f )
+                if ( m_DurationMs <= 0.0f )
 				{
 					m_DurationMs = (float)(m_Video.Call<long>("GetLength"));
+                    // --- 优化：获取视频帧率并计算帧间隔 ---
+                   // float frameRate = GetVideoFrameRate();
+                   // if (frameRate > 0)
+                   // {
+                   //     m_videoFrameInterval = 1f / frameRate;
+                   // }
 //					if( m_DurationMs > 0.0f ) { Helper.LogInfo("Duration: " + m_DurationMs); }
 				}
 			}

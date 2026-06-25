@@ -335,6 +335,11 @@ namespace GameApp.Media
             return result;
         }
         //-------------------------------------------------
+        public void SetDuration(float time)
+        {
+            m_DurationMs = time;
+        }
+        //-------------------------------------------------
         public bool CanPlay()
         {
             bool result = false;

@@ -91,6 +91,11 @@ namespace GameApp.Media
         {
             return m_VideoPath;
         }
+        //-------------------------------------------------
+        public void SetDuration(float time)
+        {
+            m_DurationMs = time;
+        }
         //------------------------------------------------------
         public bool OpenVideo(UnityEngine.Video.VideoClip videoClip)
         {

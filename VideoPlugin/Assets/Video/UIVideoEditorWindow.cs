@@ -2,7 +2,6 @@
 using GameApp.Media;
 using GameApp.UIComponent;
 using System.IO;
-using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
@@ -51,7 +50,6 @@ namespace GameApp.UIComponent
         private bool m_bExpandPlayback = false;
         private bool m_bExpandErasure = false;
         private bool m_bExpandEdgeClip = false;
-        private bool m_bExpandEvent = false;
 
         // EditorPrefs keys
         private const string PREF_LAST_VIDEO_DIR = "UIVideoEditor_LastVideoDir";
@@ -519,27 +517,12 @@ namespace GameApp.UIComponent
             EditorGUILayout.Space(3);
             DrawEdgeClipSection();
             EditorGUILayout.Space(3);
-            DrawEvents();
-            EditorGUILayout.Space(3);
             DrawToolsSection();
-
 
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
         }
-        //------------------------------------------------------
-        void DrawEvents()
-        {
-            m_bExpandEvent = EditorGUILayout.Foldout(m_bExpandEvent, "事件回调");
-            if (m_bExpandEvent)
-            {
-                EditorGUILayout.BeginVertical("box");
-                var triggerEvents = m_SerializedTarget.FindProperty("triggerEvents");
-                if (triggerEvents != null) EditorGUILayout.PropertyField(triggerEvents, new GUIContent("触发事件"));
-                EditorGUILayout.EndVertical();
-            }
-        //    EditorGUILayout.EndFoldoutHeaderGroup();
-        }
+
         //------------------------------------------------------
         void DrawPlaybackSection()
         {
@@ -864,6 +847,7 @@ namespace GameApp.UIComponent
             }
             EditorGUILayout.EndVertical();
         }
+
         //------------------------------------------------------
         public static string FindScriptFilePath(System.Type classType)
         {
@@ -899,9 +883,7 @@ namespace GameApp.UIComponent
                 }
             }
             return filePath;
-        }
-        //------------------------------------------------------
-        /// <summary>
+        }        /// <summary>
         /// 处理视频路径选择逻辑：
         /// - StreamingAssets目录下 → 取消缓存模式，记录相对路径到url
         /// - 非StreamingAssets目录 → 自动勾选缓存模式，不写入url

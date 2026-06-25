@@ -9,11 +9,10 @@
 #define USE_AVPRO
 #endif
 #if USE_AVPRO
-using RenderHeads.Media.AVProVideo;
-using System.IO;
 using UnityEngine;
 using UnityEngine.Video;
-using static UnityEngine.Networking.UnityWebRequest;
+using System.IO;
+using RenderHeads.Media.AVProVideo;
 
 namespace GameApp.Media
 {
@@ -121,7 +120,6 @@ namespace GameApp.Media
 
             m_VideoPath = path;
 
-            m_DurationMs = 0.0f;
             m_bPrepared = false;
             m_bReadyStarted = false;
             m_VideoOpened = true;
@@ -215,6 +213,11 @@ namespace GameApp.Media
         void OnPlayerEnded(VideoPlayer source)
         {
 
+        }
+        //-------------------------------------------------
+        public void SetDuration(float time)
+        {
+            m_DurationMs = time;
         }
         //-------------------------------------------------
         public void SetLooping(bool bLooping)
@@ -341,10 +344,6 @@ namespace GameApp.Media
         //-------------------------------------------------
         public float GetDurationMs()
         {
-            if (m_DurationMs<=1000 && m_VideoPlayer && m_VideoPlayer.Info != null)
-            {
-                m_DurationMs = (float)(m_VideoPlayer.Info.GetDuration()* 1000);
-            }
             return m_DurationMs;
         }
         //-------------------------------------------------

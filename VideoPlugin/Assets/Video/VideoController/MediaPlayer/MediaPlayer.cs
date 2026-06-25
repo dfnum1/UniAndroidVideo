@@ -61,6 +61,7 @@ namespace GameApp.Media
         float GetPlaybackRate();
 
         void Seek(float timeMs);
+        void SetDuration(float timeMs);
 
         void SetCurveAlpha(AnimationCurve alpha);
         float GetAlhpa(bool normalTime);

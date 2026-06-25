@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 #endif
 using UnityEngine;
+using UnityEngine.Rendering.UI;
 using UnityEngine.UI;
 using UnityEngine.Video;
 
@@ -43,6 +44,7 @@ namespace GameApp.UIComponent
         public Graphic defaultShow = null;
         public bool disableDontStop = false;
         public bool autoNativeSize = false;
+        [SerializeField] private bool preUse = false;
         [SerializeField] private bool useCustomParams = false;
         [SerializeField] private bool keepEndFrame = false;
         [SerializeField][Range(0, 1)] private float colorCutoff;
@@ -63,6 +65,7 @@ namespace GameApp.UIComponent
         private float m_fDelayPlay = 0.0f;
         private bool m_bVideoLoop = true;
         private bool m_bPersistentPath = false;
+        private float m_fVideoDuration = 0;
         private IMediaPlayer m_VideoPlayer;
         private IMediaPlayer m_LastVideoPlayer;
         private EraserParam m_LastEraserParam = new EraserParam();
@@ -71,6 +74,10 @@ namespace GameApp.UIComponent
 
         private float m_fAlphaTime = 0.0f;
         private float m_fAlphaFade = 1;
+
+        private float m_fKeepLogicPlayTime = 0;
+        private float m_fKeepEndErrorTime = 150;
+        private bool m_bUseLogicTimeCheck = true;
 
         private uint m_TriggerEventFlags = 0;
 
@@ -86,6 +93,7 @@ namespace GameApp.UIComponent
         //------------------------------------------------------
         protected override void Awake()
         {
+            m_fVideoDuration = 0;
             m_TriggerEventFlags = 0;
             m_bKeepEndFrameTrigger = false;
             m_fAlphaFade = 1;
@@ -198,8 +206,19 @@ namespace GameApp.UIComponent
             }
         }
         //------------------------------------------------------
+        public void SetKeepEndErrorTime(float time)
+        {
+            m_fKeepEndErrorTime = time * 1000;
+        }
+        //------------------------------------------------------
+        public void UseLogicTimeKeep(bool bUsed)
+        {
+            m_bUseLogicTimeCheck = bUsed;
+        }
+        //------------------------------------------------------
         public void Stop()
         {
+            m_fVideoDuration = 0;
             m_TriggerEventFlags = 0;
             m_bKeepEndRePlay = false;
             m_bKeepEndFrameTrigger = false;
@@ -214,6 +233,7 @@ namespace GameApp.UIComponent
             m_fAlphaFade = 1;
             m_strUrl = null;
             m_fAlphaTime = 0;
+            m_fKeepLogicPlayTime = 0;
             if (defaultShow)
             {
                 var color = defaultShow.color;
@@ -266,15 +286,17 @@ namespace GameApp.UIComponent
                 m_VideoPlayer.Play();
         }
         //------------------------------------------------------
-        public float GetDuration()
+        public void SetDuration(float duration)
         {
-            if (m_VideoPlayer != null) return m_VideoPlayer.GetDurationMs() / 1000.0f;
-            return 0;
+            m_fVideoDuration = duration* 1000;
+            if (m_VideoPlayer == null) return;
+            m_VideoPlayer.SetDuration(m_fVideoDuration);
         }
         //------------------------------------------------------
-        public float GetCurTime()
+        public float GetDuration()
         {
-            if (m_VideoPlayer != null) return m_VideoPlayer.GetCurrentTimeMs() / 1000.0f;
+            if (m_fVideoDuration > 0) return m_fVideoDuration / 1000.0f;
+            if (m_VideoPlayer != null) return m_VideoPlayer.GetDurationMs() / 1000.0f;
             return 0;
         }
         //------------------------------------------------------
@@ -375,9 +397,10 @@ namespace GameApp.UIComponent
         {
             if (m_VideoPlayer == null) return;
             m_VideoPlayer.Seek(time * 1000.0f);
+            m_fKeepLogicPlayTime = time;
             if (m_bKeepEndFrameTrigger &&
                 keepEndFrame && !bLoop &&
-                m_VideoPlayer.GetDurationMs() > 0 && time < (m_VideoPlayer.GetDurationMs() / 1000.0f - Time.fixedDeltaTime))
+                m_VideoPlayer.GetDurationMs() > 0 && time < (m_VideoPlayer.GetDurationMs() / 1000.0f - m_fKeepEndErrorTime*0.001f))
             {
                 m_bKeepEndFrameTrigger = false;
             }
@@ -617,6 +640,7 @@ namespace GameApp.UIComponent
             m_bKeepEndRePlay = false;
             m_TriggerEventFlags = 0;
             m_fAlphaTime = ALPHA_TIME;
+            m_fKeepLogicPlayTime = 0;
             m_fDelayPlay = -1.0f;
 
             if (m_VideoPlayer == null)
@@ -649,6 +673,7 @@ namespace GameApp.UIComponent
             m_VideoPlayer = VideoController.PlayVideo(this.m_strUrl, this.m_bPersistentPath);
             if (m_VideoPlayer != null)
             {
+                if(m_fVideoDuration>0) m_VideoPlayer.SetDuration(m_fVideoDuration);
                 m_VideoPlayer.SetLooping(this.m_bVideoLoop);
                 m_VideoPlayer.AddListener(OnMediaListener);
                 return true;
@@ -667,11 +692,28 @@ namespace GameApp.UIComponent
             if (m_VideoPlayer != player) return;
             if (m_pCallback != null) m_pCallback(type);
             if (type == MediaPlayerEvent.EventType.Closing ||
-                type == MediaPlayerEvent.EventType.Error ||
                 type == MediaPlayerEvent.EventType.FinishedPlaying)
             {
                 m_VideoPlayer = null;
+                m_fKeepLogicPlayTime = 0;
             }
+            else if(type == MediaPlayerEvent.EventType.Error)
+            {
+                m_VideoPlayer = null;
+                m_fKeepLogicPlayTime = 0;
+                //! 视频解析错误，隐藏视频画面
+                var col = this.color;
+                col.a = 0;
+                this.color = col;
+                if (this.defaultShow != null)
+                {
+                    col = this.defaultShow.color;
+                    col.a = 1;
+                    this.defaultShow.color = col;
+                }
+            }
+            else if (type == MediaPlayerEvent.EventType.Started)
+                m_fKeepLogicPlayTime = 0;
         }
         //------------------------------------------------------
         void Update()
@@ -810,11 +852,14 @@ namespace GameApp.UIComponent
             {
                 this.SetNativeSize();
             }
-
-            if(!m_bKeepEndFrameTrigger && this.keepEndFrame && !this.bLoop && m_LastVideoPlayer==null)
+           // Debug.Log("Video:" + m_VideoPlayer.GetCurrentTimeMs() + "    dur:" + m_VideoPlayer.GetDurationMs() + "   logic:" + m_fKeepLogicPlayTime);
+            if(this.texture && this.m_VideoPlayer.IsPlaying())
+                m_fKeepLogicPlayTime += Time.deltaTime;
+            if (!m_bKeepEndFrameTrigger && this.keepEndFrame && !this.bLoop && m_LastVideoPlayer==null)
             {
                 var duration = this.m_VideoPlayer.GetDurationMs();
-                if (duration>0 && this.m_VideoPlayer.GetCurrentTimeMs() >= (duration - Time.fixedDeltaTime*1000))
+                var curTime = m_bUseLogicTimeCheck?(m_fKeepLogicPlayTime * 1000):this.m_VideoPlayer.GetCurrentTimeMs();
+                if (duration>0 && curTime >= (duration - m_fKeepEndErrorTime))
                 {
                     m_bKeepEndFrameTrigger = true;
                     //! 保留最后一帧画面：暂停播放器，使纹理停留在最后一帧
@@ -826,15 +871,13 @@ namespace GameApp.UIComponent
                 }
             }
 
-            float duraiton = this.m_VideoPlayer.GetDurationMs();
-            float curTime1 = this.m_VideoPlayer.GetCurrentTimeMs();
-            Debug.Log("CurTime:" + curTime1 + "    Duration:" + duraiton);
             if (m_pEventCallback!=null && this.triggerEvents != null && this.triggerEvents.Length > 0)
             {
                 var duration = this.m_VideoPlayer.GetDurationMs();
                 if(duration>0)
                 {
-                    float curTime = this.m_VideoPlayer.GetCurrentTimeMs();
+                    //float curTime = this.m_VideoPlayer.GetCurrentTimeMs();
+					var curTime = m_bUseLogicTimeCheck?(m_fKeepLogicPlayTime * 1000):this.m_VideoPlayer.GetCurrentTimeMs();
                     if(curTime<= Time.fixedDeltaTime*1000)
                     {
                         m_TriggerEventFlags = 0;
