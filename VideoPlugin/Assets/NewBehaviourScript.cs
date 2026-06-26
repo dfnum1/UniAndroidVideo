@@ -6,6 +6,10 @@ using UnityEngine.UI;
 
 public class NewBehaviourScript : MonoBehaviour
 {
+    public Slider seekProcess;
+    public UIVideo seekVideo;
+
+
     public Text videoText1;
     public Text videoText2;
 
@@ -55,6 +59,11 @@ public class NewBehaviourScript : MonoBehaviour
         if (video2 != null && videoText2)
         {
             videoText2.text = video2.GetCurTime() + "/" + video2.GetDuration();
+        }
+
+        if(seekVideo && seekProcess)
+        {
+            seekVideo.SeekNormalTime(seekProcess.value);
         }
     }
 

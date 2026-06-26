@@ -413,6 +413,12 @@ namespace GameApp.UIComponent
             Play(assetPath, true, bLoop, fDelayPlay, pCallback, onEvents);
         }
         //------------------------------------------------------
+        public void SeekNormalTime(float process)
+        {
+            process = Mathf.Clamp01(process);
+            SeekTime(process*GetDuration());
+        }
+        //------------------------------------------------------
         public void SeekTime(float time)
         {
             if (m_VideoPlayer == null) return;
