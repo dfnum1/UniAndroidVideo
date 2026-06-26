@@ -115,6 +115,7 @@
     <None Include="Assets\AVProVideo\Runtime\Plugins\WSA\UWP\x86_64\AVProVideoWinRT.dll" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\Resources\AVProVideo-Internal-UI-Default-Stereo.shader" />
     <None Include="Assets\AVProVideo\Runtime\Plugins\Windows\x86\Audio360.dll" />
+    <None Include="Assets\AVProVideo\Runtime\Plugins\Android\libsamplerate-License.txt" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\Resources\AVProVideo-Internal-IMGUI-Transparent.shader" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\AVProVideo-Unlit-Transparent-AndroidOES.shader" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\AVProVideo-VR-InsideSphere-AndroidOES.shader" />
@@ -126,6 +127,7 @@
     <None Include="Assets\AVProVideo\Runtime\Shaders\AVProVideo-Lit-Transparent-Diffuse.shader" />
     <None Include="Assets\AVProVideo\Runtime\Plugins\WSA\UWP\ARM\AVProVideo.dll" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\AVProVideo-Lit-Diffuse.shader" />
+    <None Include="Assets\AVProVideo\Runtime\Plugins\Android\proguard-avprovideo.txt" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\AVProVideo-VR-InsideSphere.shader" />
     <None Include="Assets\AVProVideo\Runtime\Shaders\AVProVideo-VR-InsideSphere-Transparent.shader" />
     <None Include="Assets\AVProVideo\Runtime\Plugins\Windows\x86_64\AVProVideoWinRT.dll" />

@@ -17,8 +17,14 @@ public class NewBehaviourScript : MonoBehaviour
     public UIVideo video2;
     string[] videos =
     {
-        "CH01_0001_ZhuJiao.mp4",
-        "CH01_0002_ZhuJiao.mp4",
+          "hero_000_batch.mp4",
+        "hero_002_batch.mp4",
+        "hero_003_batch.mp4",
+        "hero_004_batch.mp4",
+      "talk_002.mp4",
+        "talk_002_disdain.mp4",
+      "talk_king_04.mp4",
+      "CH01_0002_ZhuJiao.mp4",
         "CH01_0004_SaiDi.mp4",
         "CH01_0004_ZhuJiao.mp4",
         "CH01_0006_ZhuJiao.mp4",
