@@ -35,6 +35,8 @@ import com.google.android.exoplayer2.upstream.cache.NoOpCacheEvictor;
 import com.google.android.exoplayer2.upstream.cache.SimpleCache;
 import com.google.android.exoplayer2.util.Util;
 import com.google.android.exoplayer2.mediacodec.MediaCodecSelector;
+import com.google.android.exoplayer2.mediacodec.MediaCodecUtil;
+import com.google.android.exoplayer2.DefaultRenderersFactory;
 //import com.twobigears.audio360.AudioEngine;
 //import com.twobigears.audio360.SpatDecoderQueue;
 import com.google.android.exoplayer2.Player;
@@ -49,9 +51,13 @@ import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
 import com.google.android.exoplayer2.metadata.Metadata;
 import java.io.File;
 import java.text.SimpleDateFormat;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
-import java.util.Locale;
 import java.util.List;
+import java.util.Locale;
+
+import com.google.android.exoplayer2.mediacodec.MediaCodecInfo;
 
 public class VideoPlayer {
     private final String TAG = "ExoVideoPlayer";
@@ -77,7 +83,7 @@ public class VideoPlayer {
     private volatile long lastPlaybackUpdateTime;
     private volatile float lastPlaybackSpeed;
     private volatile boolean isDirtySurfaceSize;
-    private volatile boolean hasRetriedDecoderInit = false; // 标记是否已经尝试过重新初始化解码器
+    private volatile boolean hasRetriedWithC2 = false; // 标记是否已经尝试过使用C2解码器回退
 
     private ExoPlayerUnity m_ExoPlayerUnity;
 
@@ -147,6 +153,7 @@ public class VideoPlayer {
     public void Prepare(Surface surface) {
         // send videoID and textureID back to unity to create external texture
         duration = 0;
+        hasRetriedWithC2 = false;
         mySurface = surface;
 
         // 1. AudioEngine
@@ -245,34 +252,77 @@ public class VideoPlayer {
                 Log.e(TAG, "ExoPlayer Error: " + error.getMessage());
                 Log.e(TAG, "Error cause: " + (error.getCause() != null ? error.getCause().getMessage() : "null"));
 
-                // 检查是否是解码器初始化失败
-                if (error.getMessage().contains("Decoder init failed") ||
-                        error.getMessage().contains("MediaCodecRenderer$DecoderInitializationException")) {
+                // 检查是否是解码器相关失败（OMX服务崩溃、解码器初始化失败等）
+                String errMsg = error.getMessage();
+                boolean isDecoderError = errMsg != null && (errMsg.contains("Decoder init failed") ||
+                        errMsg.contains("MediaCodecRenderer$DecoderInitializationException") ||
+                        errMsg.contains("Unable to instantiate codec") ||
+                        errMsg.contains("OMX"));
 
-                    // 只尝试一次重新初始化，避免无限重试循环
-                    if (hasRetriedDecoderInit) {
-                        Log.e(TAG, "解码器初始化再次失败，不再重试。");
+                if (isDecoderError) {
+                    // 已经用C2重试过，不再重试
+                    if (hasRetriedWithC2) {
+                        Log.e(TAG, "C2解码器也失败，不再重试。");
                         return;
                     }
-                    hasRetriedDecoderInit = true;
+                    hasRetriedWithC2 = true;
 
-                    Log.e(TAG, "解码器初始化失败，尝试重新初始化播放器（仅一次）...");
+                    Log.e(TAG, "解码器初始化失败，尝试使用C2解码器重新初始化播放器...");
 
-                    // 在ExoPlayer 2.15.1中，当解码器失败时，我们可以尝试重新初始化播放器
-                    // 这里添加延迟处理，避免立即重试导致的循环
+                    // 延迟处理，避免立即重试导致的循环
                     new android.os.Handler().postDelayed(new Runnable() {
                         @Override
                         public void run() {
                             try {
-                                Log.e(TAG, "尝试重新初始化播放器...");
-                                // 重新准备播放器
+                                Log.e(TAG, "使用C2解码器重试...");
+                                // 释放旧播放器
                                 if (exoPlayer != null) {
                                     exoPlayer.release();
                                 }
 
-                                // 重新创建播放器实例
-                                DefaultTrackSelector newTrackSelector = new DefaultTrackSelector(myContext);
-                                exoPlayer = new SimpleExoPlayer.Builder(myContext)
+                                // 创建C2优先的MediaCodecSelector
+                                MediaCodecSelector c2Selector = new MediaCodecSelector() {
+                                    @Override
+                                    public List<MediaCodecInfo> getDecoderInfos(
+                                            String mimeType, boolean requiresSecureDecoder,
+                                            boolean requiresTunnelingDecoder)
+                                            throws MediaCodecUtil.DecoderQueryException {
+                                        List<MediaCodecInfo> decoderInfos = MediaCodecSelector.DEFAULT
+                                                .getDecoderInfos(mimeType, requiresSecureDecoder,
+                                                        requiresTunnelingDecoder);
+                                        // 优先使用C2解码器，其次才是OMX
+                                        Collections.sort(decoderInfos,
+                                                new Comparator<MediaCodecInfo>() {
+                                                    @Override
+                                                    public int compare(MediaCodecInfo a,
+                                                            MediaCodecInfo b) {
+                                                        boolean aIsC2 = a.name != null && a.name.startsWith(
+                                                                "c2.");
+                                                        boolean bIsC2 = b.name != null && b.name.startsWith(
+                                                                "c2.");
+                                                        if (aIsC2 && !bIsC2)
+                                                            return -1;
+                                                        if (!aIsC2 && bIsC2)
+                                                            return 1;
+                                                        return 0;
+                                                    }
+                                                });
+                                        Log.d(TAG, "C2Selector: mime=" + mimeType
+                                                + " codecs=" + decoderInfos);
+                                        return decoderInfos;
+                                    }
+                                };
+
+                                // 用C2优先的RenderersFactory重建播放器
+                                DefaultRenderersFactory renderersFactory = new DefaultRenderersFactory(
+                                        myContext)
+                                        .setMediaCodecSelector(c2Selector)
+                                        .setEnableDecoderFallback(true);
+
+                                DefaultTrackSelector newTrackSelector = new DefaultTrackSelector(
+                                        myContext);
+                                exoPlayer = new SimpleExoPlayer.Builder(myContext,
+                                        renderersFactory)
                                         .setTrackSelector(newTrackSelector)
                                         .build();
                                 AddPlayerListener();
@@ -281,17 +331,19 @@ public class VideoPlayer {
                                 }
 
                                 // 重新设置媒体源并准备
-                                DataSource.Factory dataSourceFactory = buildDataSourceFactory(myContext);
+                                DataSource.Factory dataSourceFactory = buildDataSourceFactory(
+                                        myContext);
                                 Uri uri = ParseFilePath();
-                                MediaSource newVideoSource = buildMediaSource(myContext, uri, null, dataSourceFactory);
+                                MediaSource newVideoSource = buildMediaSource(myContext, uri, null,
+                                        dataSourceFactory);
                                 exoPlayer.setMediaSource(newVideoSource);
                                 exoPlayer.prepare();
                                 exoPlayer.setRepeatMode(Player.REPEAT_MODE_ONE);
                                 exoPlayer.setPlayWhenReady(false);
 
-                                Log.e(TAG, "播放器重新初始化成功");
+                                Log.e(TAG, "使用C2解码器重新初始化成功");
                             } catch (Exception e) {
-                                Log.e(TAG, "重新初始化播放器失败: " + e.getMessage());
+                                Log.e(TAG, "C2解码器重试失败: " + e.getMessage());
                             }
                         }
                     }, 1000);
