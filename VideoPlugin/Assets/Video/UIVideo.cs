@@ -721,12 +721,8 @@ namespace GameApp.UIComponent
             if (m_VideoPlayer != player) return;
             if (m_pCallback != null) m_pCallback(type);
             if (type == MediaPlayerEvent.EventType.Closing ||
-                type == MediaPlayerEvent.EventType.FinishedPlaying)
-            {
-                m_VideoPlayer = null;
-                m_fKeepLogicPlayTime = 0;
-            }
-            else if(type == MediaPlayerEvent.EventType.Error)
+                type == MediaPlayerEvent.EventType.FinishedPlaying ||
+                type == MediaPlayerEvent.EventType.Error)
             {
                 m_VideoPlayer = null;
                 m_fKeepLogicPlayTime = 0;
