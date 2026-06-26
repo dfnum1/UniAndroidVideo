@@ -21,6 +21,7 @@ namespace GameApp.Media
         public string m_VideoPath;
 
         public bool m_Loop = false;
+        private float m_fSeekTime = 0;
 
         private bool m_bReadyStarted = false;
         private bool m_bPrepared = false;
@@ -150,6 +151,7 @@ namespace GameApp.Media
             m_bReadyStarted = false;
             m_bPrepared = false;
             m_Loop = false;
+            m_fSeekTime = 0;
 
             m_DurationMs = 0.0f;
 
@@ -173,17 +175,20 @@ namespace GameApp.Media
                     m_DurationMs = (float)(player.Info.GetDuration() * 1000);
                     if (m_events != null) m_events.Invoke(this, MediaPlayerEvent.EventType.MetaDataReady, (ErrorCode)eventType);
                     SetLooping(m_Loop);
+                    if (m_fSeekTime > 0) Seek(m_fSeekTime);
                     break;
                 case RenderHeads.Media.AVProVideo.MediaPlayerEvent.EventType.ReadyToPlay:
                     m_bReadyStarted = true;
                     if (m_events != null) m_events.Invoke(this, MediaPlayerEvent.EventType.ReadyToPlay, (ErrorCode)eventType);
                     SetLooping(m_Loop);
+                    if (m_fSeekTime > 0) Seek(m_fSeekTime);
                     break;
                 case RenderHeads.Media.AVProVideo.MediaPlayerEvent.EventType.Started:
                     m_bReadyStarted = true;
                     m_DurationMs = (float)(player.Info.GetDuration() * 1000);
                     if (m_events != null) m_events.Invoke(this, MediaPlayerEvent.EventType.Started, (ErrorCode)eventType);
                     SetLooping(m_Loop);
+                    if (m_fSeekTime > 0) Seek(m_fSeekTime);
                     break;
                 case RenderHeads.Media.AVProVideo.MediaPlayerEvent.EventType.FirstFrameReady:
                     if (m_events != null) m_events.Invoke(this, MediaPlayerEvent.EventType.FirstFrameReady, (ErrorCode)eventType);
@@ -311,6 +316,7 @@ namespace GameApp.Media
         //-------------------------------------------------
         public void Seek(float timeMs)
         {
+            m_fSeekTime = timeMs;
             if (m_VideoPlayer && m_VideoPlayer.Control!=null)
             {
                 m_VideoPlayer.Control.Seek((double)(timeMs * 0.001f));

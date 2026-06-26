@@ -4,10 +4,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 #endif
 using UnityEngine;
-using UnityEngine.Rendering.UI;
 using UnityEngine.UI;
-using UnityEngine.Video;
-
 
 namespace GameApp.UIComponent
 {
@@ -74,6 +71,7 @@ namespace GameApp.UIComponent
 
         private float m_fAlphaTime = 0.0f;
         private float m_fAlphaFade = 1;
+        private float m_fFadeInAlpha = -1;
 
         private float m_fKeepLogicPlayTime = 0;
         private float m_fKeepEndErrorTime = 150;
@@ -97,6 +95,7 @@ namespace GameApp.UIComponent
             m_TriggerEventFlags = 0;
             m_bKeepEndFrameTrigger = false;
             m_fAlphaFade = 1;
+            m_fFadeInAlpha = -1;
             erasureColor.a = 0.0f;
             this.color = erasureColor;
             base.Awake();
@@ -107,6 +106,7 @@ namespace GameApp.UIComponent
             m_TriggerEventFlags = 0;
             m_bKeepEndFrameTrigger = false;
             m_fAlphaFade = 1;
+            m_fFadeInAlpha = -1;
             erasureColor.a = 0.0f;
             this.color = erasureColor;
             StartVideo();
@@ -193,6 +193,7 @@ namespace GameApp.UIComponent
             m_bKeepEndFrameTrigger = false;
             m_fAlphaTime = ALPHA_TIME;
             m_fAlphaFade = 1;
+            m_fFadeInAlpha = -1;
             erasureColor.a = 0.0f;
             this.color = erasureColor;
             if (defaultShow) defaultShow.CrossFadeAlpha(1, ALPHA_TIME, true);
@@ -231,6 +232,7 @@ namespace GameApp.UIComponent
             m_pEventCallback = null;
             m_fDelayPlay = 0.0f;
             m_fAlphaFade = 1;
+            m_fFadeInAlpha = -1;
             m_strUrl = null;
             m_fAlphaTime = 0;
             m_fKeepLogicPlayTime = 0;
@@ -300,6 +302,12 @@ namespace GameApp.UIComponent
             return 0;
         }
         //------------------------------------------------------
+        public float GetCurTime()
+        {
+            if (m_VideoPlayer != null) return m_VideoPlayer.GetCurrentTimeMs() / 1000.0f;
+            return 0;
+        }
+        //------------------------------------------------------
         public bool IsPlaying()
         {
             if (m_VideoPlayer != null) return m_VideoPlayer.IsPlaying();
@@ -314,6 +322,18 @@ namespace GameApp.UIComponent
         public void SetAlphaFade(float alpha)
         {
             m_fAlphaFade = Mathf.Clamp01(alpha);
+        }
+        //------------------------------------------------------
+        public void FadeInAlpah(float alpha)
+        {
+            m_fFadeInAlpha = Mathf.Clamp01(alpha);
+            if(m_VideoPlayer!=null)
+            {
+                erasureColor.a = alpha;
+                var color = this.color;
+                color.a = alpha;
+                this.color = color;
+            }
         }
         //------------------------------------------------------
         public bool Play(UnityEngine.Video.VideoClip videoClip, bool bLoop = false, System.Action<MediaPlayerEvent.EventType> onCallback = null, System.Action<string> onEvents = null)
@@ -658,6 +678,9 @@ namespace GameApp.UIComponent
             {
                 erasureColor.a = 1.0f;
             }
+
+            if (m_fFadeInAlpha > 0)
+                erasureColor.a = m_fFadeInAlpha;
 
             this.color = erasureColor;
             if (defaultShow)

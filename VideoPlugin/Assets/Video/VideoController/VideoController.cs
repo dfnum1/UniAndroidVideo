@@ -305,7 +305,7 @@ namespace GameApp.Media
             //            }
             //            Debug.LogFormat("[TestUIVideo] PrepareForPlayWithName, Url:{0}", playUrl);
             //            return playUrl;
-            return null;
+            //            return null;
         }
 
         public static string GetAVProPath()

@@ -86,6 +86,7 @@ namespace GameApp.Media
         // State
         private bool m_bPlaying = false;
         private bool m_bVideoLoop = true;
+        private float m_fSeekTime =-1;
         private bool m_VideoOpened = false;
         private bool m_AutoStartTriggered = false;
         private bool m_WasPlayingOnPause = false;
@@ -412,6 +413,8 @@ namespace GameApp.Media
             m_Width = 0;
             m_Height = 0;
 
+            m_fSeekTime=-1;
+
             m_AutoStart = false;
 
 			_lastError = ErrorCode.None;
@@ -521,6 +524,7 @@ namespace GameApp.Media
         //-------------------------------------------------
         public void Seek(float timeMs)
 		{
+            m_fSeekTime = timeMs;
 			if (m_Video != null)
 			{
                 float time = GetDurationMs();
@@ -1040,6 +1044,7 @@ namespace GameApp.Media
                         //m_Video.Call("AttackSurface");
                         SetLooping(m_bVideoLoop);
                         if(m_AutoStart) Play();
+                        if(m_fSeekTime>0)Seek(m_fSeekTime);
                     }
                     break;
                 case Native.ExoPlayerEvent.Render:
