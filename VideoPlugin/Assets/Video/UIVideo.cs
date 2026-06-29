@@ -730,12 +730,15 @@ namespace GameApp.UIComponent
                 var col = this.color;
                 col.a = 0;
                 this.color = col;
-                if (this.defaultShow != null)
-                {
-                    col = this.defaultShow.color;
-                    col.a = 1;
-                    this.defaultShow.color = col;
-                }
+				if(type == MediaPlayerEvent.EventType.Error)
+				{
+					if (this.defaultShow != null)
+					{
+						col = this.defaultShow.color;
+						col.a = 1;
+						this.defaultShow.color = col;
+					}
+				}
             }
             else if (type == MediaPlayerEvent.EventType.Started)
                 m_fKeepLogicPlayTime = 0;
