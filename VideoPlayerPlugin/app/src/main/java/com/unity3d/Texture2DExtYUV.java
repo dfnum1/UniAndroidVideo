@@ -4,42 +4,55 @@ import android.content.Context;
 import android.opengl.GLES20;
 import android.opengl.GLES30;
 
+import java.nio.ByteBuffer;
+
 public class Texture2DExtYUV extends Texture2DExt {
 
         private static final String TAG = Texture2DExtYUV.class.getSimpleName();
 
+        // Y / U / V 三个平面各自的纹理，YUV->RGB 转换放到 GPU（片元着色器）里完成，
+        // 避免在 CPU 上逐像素做浮点转换。
+        private int mTexY;
+        private int mTexU;
+        private int mTexV;
+
+        // 采样时用于把纹理宽度（可能等于 rowStride）折算回有效画面宽度的比例。
+        private float mYSampleScale = 1.0f;
+        private float mUVSampleScale = 1.0f;
+
         public Texture2DExtYUV(Context context, int width, int height, boolean canVAO) {
                 super(context, width, height, canVAO);
+
+                // 父类构造里创建了一个 OES 纹理并存入 mTextureID，本类用不到，先删除避免泄漏。
+                if (mTextureID != 0) {
+                        GLES20.glDeleteTextures(1, new int[] { mTextureID }, 0);
+                        mTextureID = 0;
+                }
+
                 initVertex();
                 initShaderRGBA();
                 createProgram();
 
-                int[] temps = new int[1];
-                GLES20.glGenTextures(1, temps, 0);
-                mTextureID = temps[0];
-                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTextureID);
-                Utils.checkGlError("glBindTexture mTextureID");
-
-                GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER,
-                                GLES20.GL_LINEAR);
-                GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER,
-                                GLES20.GL_LINEAR);
-
-                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S,
-                                GLES20.GL_CLAMP_TO_EDGE);
-                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T,
-                                GLES20.GL_CLAMP_TO_EDGE);
-
-                // 初始化纹理数据为黑色
-                if (width > 0 && height > 0) {
-                        byte[] blackData = new byte[width * height * 4];
-                        GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, width, height, 0, GLES20.GL_RGBA,
-                                        GLES20.GL_UNSIGNED_BYTE, java.nio.ByteBuffer.wrap(blackData));
-                        Utils.checkGlError("glTexImage2D initialization");
-                }
+                mTexY = createLuminanceTexture();
+                mTexU = createLuminanceTexture();
+                mTexV = createLuminanceTexture();
 
                 mWidth = width;
                 mHeight = height;
+        }
+
+        private int createLuminanceTexture() {
+                int[] temps = new int[1];
+                GLES20.glGenTextures(1, temps, 0);
+                int texId = temps[0];
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId);
+                GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
+                GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+                Utils.checkGlError("createLuminanceTexture");
+                return texId;
         }
 
         @Override
@@ -56,11 +69,24 @@ public class Texture2DExtYUV extends Texture2DExt {
                 mVertexCode += "  vTextureCoord = vec2(aTextureCoord.x, 1.0 - aTextureCoord.y);\n";
                 mVertexCode += "}\n";
 
+                // 在片元着色器里完成 YUV(BT.601) -> RGB 转换，充分利用 GPU 并行能力。
                 mFragmentCode = "precision mediump float;\n";
                 mFragmentCode += "varying mediump vec2 vTextureCoord;\n";
-                mFragmentCode += "uniform sampler2D sTexture;\n";
+                mFragmentCode += "uniform sampler2D sTextureY;\n";
+                mFragmentCode += "uniform sampler2D sTextureU;\n";
+                mFragmentCode += "uniform sampler2D sTextureV;\n";
+                mFragmentCode += "uniform float uYScale;\n";
+                mFragmentCode += "uniform float uUVScale;\n";
                 mFragmentCode += "void main() {\n";
-                mFragmentCode += "  gl_FragColor = texture2D(sTexture, vTextureCoord);\n";
+                mFragmentCode += "  vec2 yCoord = vec2(vTextureCoord.x * uYScale, vTextureCoord.y);\n";
+                mFragmentCode += "  vec2 uvCoord = vec2(vTextureCoord.x * uUVScale, vTextureCoord.y);\n";
+                mFragmentCode += "  float y = texture2D(sTextureY, yCoord).r;\n";
+                mFragmentCode += "  float u = texture2D(sTextureU, uvCoord).r - 0.5;\n";
+                mFragmentCode += "  float v = texture2D(sTextureV, uvCoord).r - 0.5;\n";
+                mFragmentCode += "  float r = y + 1.402 * v;\n";
+                mFragmentCode += "  float g = y - 0.344 * u - 0.714 * v;\n";
+                mFragmentCode += "  float b = y + 1.772 * u;\n";
+                mFragmentCode += "  gl_FragColor = vec4(r, g, b, 1.0);\n";
                 mFragmentCode += "}\n";
         }
 
@@ -98,8 +124,21 @@ public class Texture2DExtYUV extends Texture2DExt {
                 GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
                 GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
 
+                // 绑定 Y / U / V 三个纹理到不同的纹理单元
                 GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTextureID);
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTexY);
+                GLES20.glUniform1i(GLES20.glGetUniformLocation(mProgram, "sTextureY"), 0);
+
+                GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTexU);
+                GLES20.glUniform1i(GLES20.glGetUniformLocation(mProgram, "sTextureU"), 1);
+
+                GLES20.glActiveTexture(GLES20.GL_TEXTURE2);
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTexV);
+                GLES20.glUniform1i(GLES20.glGetUniformLocation(mProgram, "sTextureV"), 2);
+
+                GLES20.glUniform1f(GLES20.glGetUniformLocation(mProgram, "uYScale"), mYSampleScale);
+                GLES20.glUniform1f(GLES20.glGetUniformLocation(mProgram, "uUVScale"), mUVSampleScale);
 
                 int positionHandle = GLES20.glGetAttribLocation(mProgram, "aPosition");
                 Utils.checkGlError("glGetAttribLocation aPosition");
@@ -116,9 +155,6 @@ public class Texture2DExtYUV extends Texture2DExt {
                                 0, uvBuffer);
                 GLES20.glEnableVertexAttribArray(maTextureHandle);
 
-                int mSamplerLoc = GLES20.glGetUniformLocation(mProgram, "sTexture");
-                GLES20.glUniform1i(mSamplerLoc, 0);
-
                 GLES20.glDrawElements(
                                 GLES20.GL_TRIANGLES, drawOrder.length,
                                 GLES20.GL_UNSIGNED_SHORT, drawListBuffer);
@@ -126,6 +162,12 @@ public class Texture2DExtYUV extends Texture2DExt {
 
                 GLES20.glDisableVertexAttribArray(positionHandle);
                 GLES20.glDisableVertexAttribArray(maTextureHandle);
+
+                GLES20.glActiveTexture(GLES20.GL_TEXTURE2);
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+                GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+                GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
                 GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
 
                 if (!m_CanUseGLBindVertexArray && lastBindeVAO != 0) {
@@ -145,13 +187,58 @@ public class Texture2DExtYUV extends Texture2DExt {
                 GLES20.glUseProgram(lastProgram[0]);
         }
 
-        public void updateTexture(int width, int height, byte[] data) {
-                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTextureID);
-                GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA,
-                                width, height, 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE,
-                                java.nio.ByteBuffer.wrap(data));
-                Utils.checkGlError("glTexImage2D");
+        /**
+         * 直接上传 YUV_420_888 的三个平面，YUV->RGB 转换交由片元着色器完成。
+         *
+         * @param width        画面宽度
+         * @param height       画面高度
+         * @param yPlane       Y 平面数据（长度为 yRowStride * height）
+         * @param uPlane       U 平面数据
+         * @param vPlane       V 平面数据
+         * @param yRowStride   Y 平面行跨度
+         * @param uvRowStride  U/V 平面行跨度
+         */
+        public void updateYUV(int width, int height,
+                        ByteBuffer yPlane, ByteBuffer uPlane, ByteBuffer vPlane,
+                        int yRowStride, int uvRowStride, int uvPixelStride) {
+                int chromaWidth = (width + 1) / 2;
+                int chromaHeight = (height + 1) / 2;
+
+                // 将纹理宽度设为 rowStride（以字节为单位），避免在 CPU 上做行压缩拷贝；
+                // 采样时通过 uYScale / uUVScale 把有效宽度折算回来。
+                uploadPlane(mTexY, yRowStride, height, yPlane);
+                uploadPlane(mTexU, uvRowStride, chromaHeight, uPlane);
+                uploadPlane(mTexV, uvRowStride, chromaHeight, vPlane);
+
+                // Y: 画面 x∈[0,1] -> 字节列 x*width，纹理宽度为 yRowStride
+                mYSampleScale = yRowStride > 0 ? (float) width / (float) yRowStride : 1.0f;
+                // U/V: 画面 x∈[0,1] -> chroma 列 x*chromaWidth -> 字节列 x*chromaWidth*pixelStride
+                // 兼容 planar(pixelStride=1) 与 semi-planar(pixelStride=2) 两种排布
+                mUVSampleScale = uvRowStride > 0
+                                ? (float) (chromaWidth * uvPixelStride) / (float) uvRowStride
+                                : 1.0f;
+
                 mWidth = width;
                 mHeight = height;
+        }
+
+        private void uploadPlane(int texId, int texWidth, int texHeight, ByteBuffer buffer) {
+                buffer.position(0);
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId);
+                GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 1);
+                GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_LUMINANCE,
+                                texWidth, texHeight, 0, GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE,
+                                buffer);
+                Utils.checkGlError("uploadPlane");
+        }
+
+        @Override
+        public void destory() {
+                int[] texs = { mTexY, mTexU, mTexV };
+                GLES20.glDeleteTextures(3, texs, 0);
+                mTexY = 0;
+                mTexU = 0;
+                mTexV = 0;
+                super.destory();
         }
 }

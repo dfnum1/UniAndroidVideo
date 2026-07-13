@@ -17,7 +17,6 @@ import android.graphics.ImageFormat;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Rect;
-import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -54,7 +53,6 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     ImageReader mVideImageReader;
 
     float[] mSurfaceTextureMat = new float[16];
-    private byte[] mCachedBodyData = null;
 
     int m_TextureHandle = 0;
 
@@ -282,7 +280,10 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         getHandler().post(new Runnable() {
             @Override
             public void run() {
-                videoPlayer.AttackSurface(mySurface);
+                // videoPlayer 可能在 post 之后、run 执行前被置空，这里需要再次判空
+                if (videoPlayer != null) {
+                    videoPlayer.AttackSurface(mySurface);
+                }
             }
         });
     }
@@ -510,61 +511,43 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
 
     void RenderImageNoGL(Image image) {
         try {
+            Image.Plane[] planes = image.getPlanes();
+            if (planes.length < 3)
+                return;
+
+            int width = image.getWidth();
+            int height = image.getHeight();
+
             if (mUnityTexture == null) {
                 mUnityTexture = new Texture2D(myContext, GetWidth(), GetHeight(), m_bCanUseGLBindVertexArray);
+                mFBO = new FBO(mUnityTexture);
             }
+
+            // 确保YUV纹理存在且尺寸正确
+            if (mTexture2DExtRGBA == null || mTexture2DExtRGBA.getWidth() != width
+                    || mTexture2DExtRGBA.getHeight() != height) {
+                if (mTexture2DExtRGBA != null)
+                    mTexture2DExtRGBA.destory();
+                mTexture2DExtRGBA = new Texture2DExtYUV(myContext, width, height, m_bCanUseGLBindVertexArray);
+            }
+
             if (this.unityMessage != null)
                 this.unityMessage.OnVideoRenderBegin(this.m_nPlayIndex);
-            Image.Plane[] planes = image.getPlanes();
-            if (planes.length >= 3) {
-                int width = image.getWidth();
-                int height = image.getHeight();
-                // 获取YUV数据
-                ByteBuffer yBuffer = planes[0].getBuffer();
-                ByteBuffer uBuffer = planes[1].getBuffer();
-                ByteBuffer vBuffer = planes[2].getBuffer();
 
-                int yRowStride = planes[0].getRowStride();
-                int uvRowStride = planes[1].getRowStride();
-                int uvPixelStride = planes[1].getPixelStride();
+            // 直接上传 Y/U/V 三个平面，YUV->RGB 转换交给 GPU（片元着色器），
+            // 省去 CPU 逐像素的浮点转换。
+            mTexture2DExtRGBA.updateYUV(width, height,
+                    planes[0].getBuffer(), planes[1].getBuffer(), planes[2].getBuffer(),
+                    planes[0].getRowStride(), planes[1].getRowStride(), planes[1].getPixelStride());
 
-                // Check and reallocate cache if necessary
-                if (mCachedBodyData == null || mCachedBodyData.length != width * height * 4) {
-                    mCachedBodyData = new byte[width * height * 4];
-                }
-
-                byte[] data = mCachedBodyData;
-
-                // YUV转RGBA
-                for (int i = 0; i < height; i++) {
-                    int invertedRowIndex = (height - 1 - i) * width;
-                    for (int j = 0; j < width; j++) {
-                        int y = yBuffer.get(i * yRowStride + j) & 0xFF;
-                        int u = uBuffer.get((i / 2) * uvRowStride + (j / 2) * uvPixelStride) & 0xFF;
-                        int v = vBuffer.get((i / 2) * uvRowStride + (j / 2) * uvPixelStride) & 0xFF;
-
-                        // YUV转RGB
-                        int r = (int) (y + 1.402f * (v - 128));
-                        int g = (int) (y - 0.344f * (u - 128) - 0.714f * (v - 128));
-                        int b = (int) (y + 1.772f * (u - 128));
-
-                        // clamp to [0, 255]
-                        r = Math.max(0, Math.min(255, r));
-                        g = Math.max(0, Math.min(255, g));
-                        b = Math.max(0, Math.min(255, b));
-
-                        // Flip vertically and write directly to byte array (RGBA)
-                        int pixelIndex = (invertedRowIndex + j) * 4;
-                        data[pixelIndex] = (byte) r; // R
-                        data[pixelIndex + 1] = (byte) g; // G
-                        data[pixelIndex + 2] = (byte) b; // B
-                        data[pixelIndex + 3] = (byte) 255; // A
-                    }
-                }
-
-                // 使用Texture2DExtRGBA的updateTexture方法更新纹理数据
-                mUnityTexture.updateTexture(width, height, data);
-            }
+            // 通过 FBO 把 YUV 转换结果渲染到 Unity 使用的纹理上
+            mFBO.FBOBegin();
+            GLES20.glViewport(0, 0, width, height);
+            GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+            Matrix.setIdentityM(mSurfaceTextureMat, 0);
+            mTexture2DExtRGBA.draw(mSurfaceTextureMat, false);
+            mFBO.FBOEnd();
 
             if (this.unityMessage != null)
                 this.unityMessage.OnVideoRenderEnd(this.m_nPlayIndex);
@@ -597,51 +580,11 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                     if (this.unityMessage != null)
                         this.unityMessage.OnVideoRenderBegin(this.m_nPlayIndex);
 
-                    // 获取YUV数据
-                    ByteBuffer yBuffer = planes[0].getBuffer();
-                    ByteBuffer uBuffer = planes[1].getBuffer();
-                    ByteBuffer vBuffer = planes[2].getBuffer();
-
-                    int yRowStride = planes[0].getRowStride();
-                    int uvRowStride = planes[1].getRowStride();
-                    int uvPixelStride = planes[1].getPixelStride();
-
-                    // 直接创建像素数组，避免使用Bitmap
-                    int[] pixels = new int[width * height];
-
-                    // YUV转RGBA
-                    for (int i = 0; i < height; i++) {
-                        for (int j = 0; j < width; j++) {
-                            int y = yBuffer.get(i * yRowStride + j) & 0xFF;
-                            int u = uBuffer.get((i / 2) * uvRowStride + (j / 2) * uvPixelStride) & 0xFF;
-                            int v = vBuffer.get((i / 2) * uvRowStride + (j / 2) * uvPixelStride) & 0xFF;
-
-                            // YUV转RGB
-                            int r = (int) (y + 1.402f * (v - 128));
-                            int g = (int) (y - 0.344f * (u - 128) - 0.714f * (v - 128));
-                            int b = (int) (y + 1.772f * (u - 128));
-
-                            // clamp to [0, 255]
-                            r = Math.max(0, Math.min(255, r));
-                            g = Math.max(0, Math.min(255, g));
-                            b = Math.max(0, Math.min(255, b));
-
-                            pixels[i * width + j] = (0xFF << 24) | (r << 16) | (g << 8) | b;
-                        }
-                    }
-
-                    // 将像素数组转换为字节数组
-                    byte[] data = new byte[width * height * 4];
-                    for (int i = 0; i < pixels.length; i++) {
-                        int pixel = pixels[i];
-                        data[i * 4] = (byte) ((pixel >> 16) & 0xFF); // R
-                        data[i * 4 + 1] = (byte) ((pixel >> 8) & 0xFF); // G
-                        data[i * 4 + 2] = (byte) (pixel & 0xFF); // B
-                        data[i * 4 + 3] = (byte) ((pixel >> 24) & 0xFF); // A
-                    }
-
-                    // 使用Texture2DExtRGBA的updateTexture方法更新纹理数据
-                    mTexture2DExtRGBA.updateTexture(width, height, data);
+                    // 直接上传 Y/U/V 三个平面，YUV->RGB 转换交给 GPU（片元着色器），
+                    // 省去 CPU 逐像素的浮点转换。
+                    mTexture2DExtRGBA.updateYUV(width, height,
+                            planes[0].getBuffer(), planes[1].getBuffer(), planes[2].getBuffer(),
+                            planes[0].getRowStride(), planes[1].getRowStride(), planes[1].getPixelStride());
 
                     // 绘制纹理到FBO
                     mFBO.FBOBegin();
