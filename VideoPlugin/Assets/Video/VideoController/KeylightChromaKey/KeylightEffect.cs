@@ -249,6 +249,13 @@ namespace GameApp.UIComponent
             if (m_outputTexture != null) return m_outputTexture;
             return m_autoOutputRT;
         }
+        public static bool Mass = true;
+        public static bool Clip = true;
+        public static bool ScreenSoftness = true;
+        public static bool Shrink = true;
+        public static bool Despot = true;
+        public static bool Blur = true;
+        public static ViewMode ViewModeType = ViewMode.FinalResult;
         //-----------------------------------------------------------
         public void Process(Texture source, RenderTexture destination)
         {
@@ -257,7 +264,7 @@ namespace GameApp.UIComponent
 
             int width = source.width;
             int height = source.height;
-            switch(drawSampleMode)
+            switch (drawSampleMode)
             {
                 case DownSampleMode.x2:
                     width /= 2;
@@ -269,8 +276,12 @@ namespace GameApp.UIComponent
                     break;
                 case DownSampleMode.x8:
                     width /= 8;
-                    height /= 8;
                     break;
+            }
+            if(!Blur && !Mass && !Clip && !ScreenSoftness && !Shrink && !Despot)
+            {
+                Graphics.Blit(source, destination);
+                return;
             }
 
             // 设置公共 Shader 参数
@@ -278,56 +289,95 @@ namespace GameApp.UIComponent
 
             // ---- Step 1: 预模糊 (Screen Pre-blur) ----
             RenderTexture preBlurred = null;
-            if (screenPreBlur > 0.01f)
+            if (Blur)
             {
-                preBlurred = DoBlur(source, width, height, screenPreBlur);
+                if (screenPreBlur > 0.01f)
+                {
+                    preBlurred = DoBlur(source, width, height, screenPreBlur);
+                }
             }
+
 
             Texture matteSource = preBlurred != null ? (Texture)preBlurred : source;
 
-            // ---- Step 2: 生成遮罩 (Generate Matte) ----
-            RenderTexture matteRT = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
-            Graphics.Blit(matteSource, matteRT, m_material, PASS_GENERATE_MATTE);
+            RenderTexture matteRT;
+            if (Mass)
+            {
+                // ---- Step 2: 生成遮罩 (Generate Matte) ----
+                matteRT = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
+                UnityEngine.Profiling.Profiler.BeginSample("Generate Matte");
+                Graphics.Blit(matteSource, matteRT, m_material, PASS_GENERATE_MATTE);
+                UnityEngine.Profiling.Profiler.EndSample();
+            }
+            else
+            {
+                matteRT = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
+                Graphics.Blit(matteSource, matteRT);
+            }
+
 
             // 释放预模糊临时纹理
             if (preBlurred != null)
                 RenderTexture.ReleaseTemporary(preBlurred);
 
-            // ---- Step 3: 遮罩裁切 (Clip Black / Clip White) ----
-            RenderTexture clippedRT = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
-            Graphics.Blit(matteRT, clippedRT, m_material, PASS_MATTE_CLIP);
-            RenderTexture.ReleaseTemporary(matteRT);
-            matteRT = clippedRT;
-
-            // ---- Step 4: 遮罩柔化 (Screen Softness) ----
-            if (screenSoftness > 0.01f)
+            if(Clip)
             {
-                RenderTexture softened = DoBlur(matteRT, width, height, screenSoftness);
+                // ---- Step 3: 遮罩裁切 (Clip Black / Clip White) ----
+                RenderTexture clippedRT = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
+                UnityEngine.Profiling.Profiler.BeginSample("Clip Black/White");
+                Graphics.Blit(matteRT, clippedRT, m_material, PASS_MATTE_CLIP);
+                UnityEngine.Profiling.Profiler.EndSample();
                 RenderTexture.ReleaseTemporary(matteRT);
-                matteRT = softened;
+                matteRT = clippedRT;
             }
 
-            // ---- Step 5: 收缩/扩展 (Shrink/Grow) ----
-            if (Mathf.Abs(screenShrinkGrow) > 0.01f)
+
+            if(ScreenSoftness)
             {
-                RenderTexture shrunkRT = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
-                Graphics.Blit(matteRT, shrunkRT, m_material, PASS_SHRINK_GROW);
-                RenderTexture.ReleaseTemporary(matteRT);
-                matteRT = shrunkRT;
+                // ---- Step 4: 遮罩柔化 (Screen Softness) ----
+                if (screenSoftness > 0.01f)
+                {
+                    UnityEngine.Profiling.Profiler.BeginSample("Screen Softness");
+                    RenderTexture softened = DoBlur(matteRT, width, height, screenSoftness);
+                    RenderTexture.ReleaseTemporary(matteRT);
+                    matteRT = softened;
+                    UnityEngine.Profiling.Profiler.EndSample();
+                }
             }
 
-            // ---- Step 6: 去斑点 (Despot) ----
-            if (screenDespotBlack > 0.01f || screenDespotWhite > 0.01f)
+            if(Shrink)
             {
-                RenderTexture despottedRT = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
-                Graphics.Blit(matteRT, despottedRT, m_material, PASS_DESPOT);
-                RenderTexture.ReleaseTemporary(matteRT);
-                matteRT = despottedRT;
+                // ---- Step 5: 收缩/扩展 (Shrink/Grow) ----
+                if (Mathf.Abs(screenShrinkGrow) > 0.01f)
+                {
+                    RenderTexture shrunkRT = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
+                    UnityEngine.Profiling.Profiler.BeginSample("Shrink/Grow");
+                    Graphics.Blit(matteRT, shrunkRT, m_material, PASS_SHRINK_GROW);
+                    UnityEngine.Profiling.Profiler.EndSample();
+                    RenderTexture.ReleaseTemporary(matteRT);
+                    matteRT = shrunkRT;
+                }
+            }
+
+            if (Despot)
+            {
+                // ---- Step 6: 去斑点 (Despot) ----
+                if (screenDespotBlack > 0.01f || screenDespotWhite > 0.01f)
+                {
+                    RenderTexture despottedRT = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
+                    UnityEngine.Profiling.Profiler.BeginSample("Despot");
+                    Graphics.Blit(matteRT, despottedRT, m_material, PASS_DESPOT);
+                    UnityEngine.Profiling.Profiler.EndSample();
+                    RenderTexture.ReleaseTemporary(matteRT);
+                    matteRT = despottedRT;
+                }
             }
 
             // ---- Step 7: 最终合成 (Composite) ----
+            UnityEngine.Profiling.Profiler.BeginSample("Composite");
             m_material.SetTexture(_MatteTexID, matteRT);
             Graphics.Blit(source, destination, m_material, PASS_COMPOSITE);
+            UnityEngine.Profiling.Profiler.EndSample();
 
             // 释放遮罩临时纹理
             RenderTexture.ReleaseTemporary(matteRT);
@@ -356,7 +406,7 @@ namespace GameApp.UIComponent
             m_material.SetFloat(_LumaCorrectionID, lumaCorrection / 100f);
 
             // View Mode
-            m_material.SetInt(_ViewModeID, (int)viewMode);
+            m_material.SetInt(_ViewModeID, (int)ViewModeType);
         }
         //-----------------------------------------------------------
         private RenderTexture DoBlur(Texture source, int width, int height, float blurSize)

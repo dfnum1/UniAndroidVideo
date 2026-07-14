@@ -732,12 +732,12 @@ namespace GameApp.UIComponent
                 this.color = col;
 				if(type == MediaPlayerEvent.EventType.Error)
 				{
-					if (this.defaultShow != null)
-					{
-						col = this.defaultShow.color;
-						col.a = 1;
-						this.defaultShow.color = col;
-					}
+	                if (this.defaultShow != null)
+	                {
+	                    col = this.defaultShow.color;
+	                    col.a = 1;
+	                    this.defaultShow.color = col;
+	                }
 				}
             }
             else if (type == MediaPlayerEvent.EventType.Started)
@@ -936,6 +936,7 @@ namespace GameApp.UIComponent
     [UnityEditor.CustomEditor(typeof(UIVideo))]
     public class UIVideoEditor : UnityEditor.Editor
     {
+        bool m_bOpenEditor = false;
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -962,9 +963,7 @@ namespace GameApp.UIComponent
                 video.DisableErasure();
             }
 
-            var mat = EditorGUILayout.ObjectField("材质", video.material, typeof(Material), false);
-            if (mat) video.material = mat as Material;
-            else video.material = null;
+            EditorGUILayout.ObjectField("当前材质", video.material, typeof(Material), false);
 
             EditorGUILayout.Space(5);
 
@@ -972,9 +971,11 @@ namespace GameApp.UIComponent
             if (GUILayout.Button("打开视频编辑器", GUILayout.Height(30)))
             {
                 UIVideoEditorWindow.OpenWithUIVideo(video);
+                m_bOpenEditor = true;
             }
 
-            serializedObject.ApplyModifiedProperties();
+            if(!m_bOpenEditor)
+                serializedObject.ApplyModifiedProperties();
         }
 
         //-----------------------------------------------------

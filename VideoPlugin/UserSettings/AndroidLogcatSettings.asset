@@ -1,9 +1,9 @@
 {
-    "m_SelectedDeviceId": "127.0.0.1:7555",
+    "m_SelectedDeviceId": "EYJ7AEVO7DLFDMZ9",
     "m_SelectedProcess": {
-        "deviceId": "",
-        "name": "",
-        "processId": 0,
+        "deviceId": "EYJ7AEVO7DLFDMZ9",
+        "name": "com.DefaultCompany.VideoPlugin",
+        "processId": 31945,
         "exited": false
     },
     "m_SelectedPriority": 0,
@@ -24,6 +24,18 @@
             "deviceId": "127.0.0.1:7555",
             "name": "com.DefaultCompany.VideoPlugin",
             "processId": 3152,
+            "exited": false
+        },
+        {
+            "deviceId": "EYJ7AEVO7DLFDMZ9",
+            "name": "com.DefaultCompany.VideoPlugin",
+            "processId": 31107,
+            "exited": false
+        },
+        {
+            "deviceId": "EYJ7AEVO7DLFDMZ9",
+            "name": "com.DefaultCompany.VideoPlugin",
+            "processId": 31945,
             "exited": false
         }
     ],

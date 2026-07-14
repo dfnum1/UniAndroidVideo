@@ -9,6 +9,8 @@ public class NewBehaviourScript : MonoBehaviour
     public Slider seekProcess;
     public UIVideo seekVideo;
 
+    public Toggle[] toggles;
+    public Dropdown viewModeDropdown;
 
     public Text videoText1;
     public Text videoText2;
@@ -69,8 +71,20 @@ public class NewBehaviourScript : MonoBehaviour
 
         if(seekVideo && seekProcess)
         {
-            seekVideo.SeekNormalTime(seekProcess.value);
+        //    seekVideo.SeekNormalTime(seekProcess.value);
         }
+
+        if(toggles!=null && toggles.Length==6)
+        {
+            KeylightEffect.Mass = toggles[0].isOn;
+            KeylightEffect.Clip = toggles[1].isOn;
+            KeylightEffect.ScreenSoftness = toggles[2].isOn;
+            KeylightEffect.Shrink = toggles[3].isOn;
+            KeylightEffect.Despot = toggles[4].isOn;
+            KeylightEffect.Blur = toggles[5].isOn;
+        }
+        if (viewModeDropdown)
+            KeylightEffect.ViewModeType = (GameApp.UIComponent.ViewMode)viewModeDropdown.value;
     }
 
     public void Stop()
@@ -80,7 +94,9 @@ public class NewBehaviourScript : MonoBehaviour
     }
     public void RePlay()
     {
-        if(m_nPlayerIndex%2==0)
+        seekVideo.Stop();
+        seekVideo.Play("pptpart01.mp4", false, false);
+        if (m_nPlayerIndex%2==0)
         {
             if (video2 != null) video2.Stop();
             video1.Play(videos[m_nPlayerIndex % videos.Length], false, true);

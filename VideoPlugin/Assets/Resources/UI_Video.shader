@@ -14,7 +14,10 @@ Shader "UI/UI_Video"
 
         _MirrorX ("Mirror X", Range(0, 1)) = 0
         _MirrorY ("Mirror Y", Range(0, 1)) = 0
-		
+		       
+        [HideInInspector]_EdgeCliper("边缘裁剪", Vector) = (0,0,0,0)
+        [HideInInspector]_EdgeFeatherFade("边缘柔化", Range(0, 0.5)) = 0
+
 		[HideInInspector]_StencilComp("Stencil Comparison", Float) = 8
 		[HideInInspector]_Stencil("Stencil ID", Float) = 0
 		[HideInInspector]_StencilOp("Stencil Operation", Float) = 0
@@ -95,6 +98,8 @@ Shader "UI/UI_Video"
             float _MirrorY;
 			float4 _ClipRect;
             float _EdgeSoft;
+            float4 _EdgeCliper;
+            float _EdgeFeatherFade;
 			CBUFFER_END
 
             
@@ -125,6 +130,9 @@ Shader "UI/UI_Video"
 
             float maskedTex2D(float4 color, float3 eraserColor, float2 uv)
             {
+#if defined(SHADER_API_METAL)// || defined(USE_AVPRO)
+                color.rgb = LinearToGammaSpace(color.rgb);
+#endif 			
                 // Chroma key to CYK conversion
                 float key_cb = rgb2cb(eraserColor.rgb);
                 float key_cr = rgb2cr(eraserColor.rgb);
@@ -204,6 +212,13 @@ Shader "UI/UI_Video"
                 col += lerp(0, desaturatedDif, _DespillLuminanceAdd);
              #endif
 
+                // 计算四个边缘的柔化透明度
+                float edgeAlphaBottom = lerp(1.0, smoothstep(_EdgeCliper.x, _EdgeCliper.x + _EdgeFeatherFade, i.uv.y), step(0.0001, _EdgeCliper.x));
+                float edgeAlphaTop = lerp(1.0, smoothstep(1.0 - _EdgeCliper.y, 1.0 - _EdgeCliper.y - _EdgeFeatherFade, i.uv.y), step(0.0001, _EdgeCliper.y));
+                float edgeAlphaLeft = lerp(1.0, smoothstep(_EdgeCliper.z, _EdgeCliper.z + _EdgeFeatherFade, i.uv.x), step(0.0001, _EdgeCliper.z));
+                float edgeAlphaRight = lerp(1.0, smoothstep(1.0 - _EdgeCliper.w, 1.0 - _EdgeCliper.w - _EdgeFeatherFade, i.uv.x), step(0.0001, _EdgeCliper.w));
+                col.a *= edgeAlphaTop * edgeAlphaBottom * edgeAlphaLeft * edgeAlphaRight;
+
 #ifdef UNITY_UI_CLIP_RECT
                 col.a *= UnityGet2DClipping(i.worldPosition.xy, _ClipRect);
 #endif
@@ -212,7 +227,7 @@ Shader "UI/UI_Video"
                 clip(col.a - 0.001);
 #endif				
                col.rgb = GammaToLinearSpace(col.rgb);
-				
+				col.a *= i.color.a;
                 return col;
             }
             ENDHLSL

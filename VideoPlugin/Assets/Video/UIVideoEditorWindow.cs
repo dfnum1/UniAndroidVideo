@@ -11,6 +11,10 @@ namespace GameApp.UIComponent
 {
     public class UIVideoEditorWindow : EditorWindow
     {
+        public static string VIDEO_PRE_MAT = "Assets/Material/Video.mat";
+        public static string VIDEO_MAT = "Assets/Material/Video.mat";
+        public static string VIDEO_MAT_ERA = "Assets/Material/Video 1.mat";
+
         // 当前操作的UIVideo（可能是场景中的，也可能是内部创建的）
         private UIVideo m_TargetVideo = null;
         private SerializedObject m_SerializedTarget = null;
@@ -193,7 +197,7 @@ namespace GameApp.UIComponent
             videoGO.transform.SetParent(m_InternalRoot.transform);
 
             m_InternalVideo = videoGO.AddComponent<UIVideo>();
-            var mat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo_Erasure.mat");
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(VIDEO_MAT_ERA);
             if (mat != null) m_InternalVideo.material = mat;
 
             var rt = videoGO.GetComponent<RectTransform>();
@@ -421,7 +425,7 @@ namespace GameApp.UIComponent
         //------------------------------------------------------
         void OnEditorUpdate()
         {
-            if (m_TargetVideo != null && m_TargetVideo.IsPlaying())
+            if (!Application.isPlaying || (m_TargetVideo != null && m_TargetVideo.IsPlaying()))
             {
                 Repaint();
             }
@@ -480,7 +484,7 @@ namespace GameApp.UIComponent
             }
 
             // 预制体保存按钮
-            if (m_ExternalTarget != null && PrefabUtility.IsPartOfAnyPrefab(m_ExternalTarget.gameObject))
+            if (m_ExternalTarget != null)
             {
                 var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
                 if (prefabStage != null)
@@ -491,8 +495,8 @@ namespace GameApp.UIComponent
                         m_SerializedTarget.ApplyModifiedProperties();
                         EditorUtility.SetDirty(m_ExternalTarget);
                         EditorUtility.SetDirty(m_ExternalTarget.gameObject);
-                        PrefabUtility.SaveAsPrefabAsset(prefabStage.prefabContentsRoot, prefabStage.assetPath);
-                        ShowNotification(new GUIContent("已保存预制体"));
+                     //   PrefabUtility.SaveAsPrefabAsset(prefabStage.prefabContentsRoot, prefabStage.assetPath);
+                     //   ShowNotification(new GUIContent("已保存预制体"));
                     }
                 }
                 else
@@ -676,9 +680,9 @@ namespace GameApp.UIComponent
                 bKeylightErasure.boolValue = false;
                 bErasure.boolValue = true;
                 if (preUse.boolValue)
-                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/PreRes/Videos/PreUIVideo_Erasure.mat");
+                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>(VIDEO_MAT_ERA);
                 else
-                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo_Erasure.mat");
+                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>(VIDEO_MAT_ERA);
                 if (m_TargetVideo.material) m_TargetVideo.material.EnableKeyword("ERASURE_COLOR");
             }
             else if (m_ErasureType == EErasureType.eKeylight)
@@ -686,9 +690,9 @@ namespace GameApp.UIComponent
                 bKeylightErasure.boolValue = true;
                 bErasure.boolValue = false;
                 if (preUse.boolValue)
-                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/PreRes/Videos/PreUIVideo.mat");
+                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>(VIDEO_PRE_MAT);
                 else
-                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo.mat");
+                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>(VIDEO_MAT);
                 if (m_TargetVideo.material) m_TargetVideo.material.DisableKeyword("ERASURE_COLOR");
             }
             else
@@ -696,9 +700,9 @@ namespace GameApp.UIComponent
                 bKeylightErasure.boolValue = false;
                 bErasure.boolValue = false;
                 if (preUse.boolValue)
-                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/PreRes/Videos/PreUIVideo.mat");
+                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>(VIDEO_PRE_MAT);
                 else
-                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo.mat");
+                    materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>(VIDEO_MAT);
                 if (m_TargetVideo.material) m_TargetVideo.material.DisableKeyword("ERASURE_COLOR");
             }
             m_TargetVideo.DestroyNewMaterial();
@@ -1072,9 +1076,9 @@ namespace GameApp.UIComponent
                     bErasure.boolValue = false;
 
                     if(preUse.boolValue)
-                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/PreRes/Videos/PreUIVideo.mat");
+                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>(VIDEO_PRE_MAT);
                     else
-                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo.mat");
+                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>(VIDEO_MAT);
                 }
                 else
                 {
@@ -1082,9 +1086,9 @@ namespace GameApp.UIComponent
                     bKeylightErasure.boolValue = false;
                     bErasure.boolValue = true;
                     if (preUse.boolValue)
-                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/PreRes/Videos/PreUIVideo_Erasure.mat");
+                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>(VIDEO_PRE_MAT);
                     else
-                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Res/UI/Material/UIVideo_Erasure.mat");
+                        materialProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<Material>(VIDEO_MAT_ERA);
                 }
 
                 // [1] 颜色 (#RRGGBB)
