@@ -214,7 +214,7 @@ Shader "Hidden/KeylightChromaKey"
                 // 重映射
                 matte = (matte - clipB) / (clipW - clipB);
                 matte = saturate(matte);
-                if(matte < 0.09) matte =0;
+                if(matte < 0.5) matte =0;
 
                 return float4(matte, matte, matte, 1.0);
             }
