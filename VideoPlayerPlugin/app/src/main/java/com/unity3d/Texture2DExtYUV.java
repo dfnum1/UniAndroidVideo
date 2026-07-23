@@ -20,6 +20,13 @@ public class Texture2DExtYUV extends Texture2DExt {
         private float mYSampleScale = 1.0f;
         private float mUVSampleScale = 1.0f;
 
+        // RGB 渲染路径（用于 MuMu 等模拟器上解码器直接输出 RGB_565 / RGBA_8888 的情况）。
+        // 单独一个 program 与一张 RGB 纹理，与 YUV 路径互不影响。
+        private int mRgbProgram = 0;
+        private int mTexRGB = 0;
+        // 把纹理宽度（可能等于 rowStride/pixelStride 折算出的像素数）折算回有效画面宽度。
+        private float mRgbSampleScale = 1.0f;
+
         public Texture2DExtYUV(Context context, int width, int height, boolean canVAO) {
                 super(context, width, height, canVAO);
 
@@ -53,6 +60,47 @@ public class Texture2DExtYUV extends Texture2DExt {
                 GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
                 Utils.checkGlError("createLuminanceTexture");
                 return texId;
+        }
+
+        // 惰性创建 RGB 渲染所需的 program 与纹理。
+        private void ensureRgbResources() {
+                if (mRgbProgram != 0)
+                        return;
+
+                String vertexCode = "attribute vec4 aPosition;\n"
+                                + "attribute mediump vec2 aTextureCoord;\n"
+                                + "varying mediump vec2 vTextureCoord;\n"
+                                + "void main() {\n"
+                                + "  gl_Position = vec4(aPosition.xy, 0.0, 1.0);\n"
+                                + "  vTextureCoord = vec2(aTextureCoord.x, 1.0 - aTextureCoord.y);\n"
+                                + "}\n";
+
+                String fragmentCode = "precision mediump float;\n"
+                                + "varying mediump vec2 vTextureCoord;\n"
+                                + "uniform sampler2D sTextureRGB;\n"
+                                + "uniform float uRgbScale;\n"
+                                + "void main() {\n"
+                                + "  vec2 coord = vec2(vTextureCoord.x * uRgbScale, vTextureCoord.y);\n"
+                                + "  gl_FragColor = vec4(texture2D(sTextureRGB, coord).rgb, 1.0);\n"
+                                + "}\n";
+
+                mRgbProgram = GLES20.glCreateProgram();
+                int vs = Utils.loadShader(GLES20.GL_VERTEX_SHADER, vertexCode);
+                int fs = Utils.loadShader(GLES20.GL_FRAGMENT_SHADER, fragmentCode);
+                GLES20.glAttachShader(mRgbProgram, vs);
+                GLES20.glAttachShader(mRgbProgram, fs);
+                GLES20.glLinkProgram(mRgbProgram);
+
+                int[] temps = new int[1];
+                GLES20.glGenTextures(1, temps, 0);
+                mTexRGB = temps[0];
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTexRGB);
+                GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
+                GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+                Utils.checkGlError("ensureRgbResources");
         }
 
         @Override
@@ -232,6 +280,133 @@ public class Texture2DExtYUV extends Texture2DExt {
                 Utils.checkGlError("uploadPlane");
         }
 
+        /**
+         * 上传 RGB_565 单平面数据（模拟器上解码器可能直接输出该格式）。
+         *
+         * @param width      画面宽度
+         * @param height     画面高度
+         * @param rgbPlane   RGB_565 数据
+         * @param rowStride  行跨度（字节）
+         */
+        public void updateRGB565(int width, int height, ByteBuffer rgbPlane, int rowStride) {
+                ensureRgbResources();
+
+                // 每像素 2 字节；把纹理宽度设为 rowStride/2（像素数），避免 CPU 行压缩拷贝。
+                int texWidth = rowStride > 0 ? rowStride / 2 : width;
+                rgbPlane.position(0);
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTexRGB);
+                GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 2);
+                GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGB,
+                                texWidth, height, 0, GLES20.GL_RGB, GLES20.GL_UNSIGNED_SHORT_5_6_5,
+                                rgbPlane);
+                Utils.checkGlError("updateRGB565");
+
+                mRgbSampleScale = texWidth > 0 ? (float) width / (float) texWidth : 1.0f;
+                mWidth = width;
+                mHeight = height;
+        }
+
+        /**
+         * 上传 RGBA_8888 单平面数据。
+         *
+         * @param width      画面宽度
+         * @param height     画面高度
+         * @param rgbaPlane  RGBA_8888 数据
+         * @param rowStride  行跨度（字节）
+         */
+        public void updateRGBA8888(int width, int height, ByteBuffer rgbaPlane, int rowStride) {
+                ensureRgbResources();
+
+                // 每像素 4 字节；把纹理宽度设为 rowStride/4（像素数）。
+                int texWidth = rowStride > 0 ? rowStride / 4 : width;
+                rgbaPlane.position(0);
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTexRGB);
+                GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 4);
+                GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA,
+                                texWidth, height, 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE,
+                                rgbaPlane);
+                Utils.checkGlError("updateRGBA8888");
+
+                mRgbSampleScale = texWidth > 0 ? (float) width / (float) texWidth : 1.0f;
+                mWidth = width;
+                mHeight = height;
+        }
+
+        /** 使用 RGB 路径绘制（配合 updateRGB565 / updateRGBA8888 使用）。 */
+        public void drawRGB() {
+                if (mRgbProgram == 0)
+                        return;
+
+                GLES20.glGetIntegerv(GLES20.GL_CURRENT_PROGRAM, lastProgram, 0);
+                GLES20.glGetIntegerv(GLES20.GL_TEXTURE_BINDING_2D, lastTexture, 0);
+                GLES20.glGetIntegerv(GLES20.GL_ACTIVE_TEXTURE, lastActiveTexture, 0);
+
+                boolean isDepthTest = GLES20.glIsEnabled(GLES20.GL_DEPTH_TEST);
+                boolean isCullFace = GLES20.glIsEnabled(GLES20.GL_CULL_FACE);
+                boolean isScissorTest = GLES20.glIsEnabled(GLES20.GL_SCISSOR_TEST);
+
+                GLES20.glDisable(GLES20.GL_DEPTH_TEST);
+                GLES20.glDisable(GLES20.GL_CULL_FACE);
+                GLES20.glDisable(GLES20.GL_SCISSOR_TEST);
+
+                GLES20.glUseProgram(mRgbProgram);
+
+                int lastBindeVAO = 0;
+                if (!m_CanUseGLBindVertexArray) {
+                        GLES30.glGetIntegerv(GLES30.GL_VERTEX_ARRAY_BINDING, mlastVAO, 0);
+                        lastBindeVAO = mlastVAO[0];
+                        GLES30.glBindVertexArray(0);
+                }
+
+                GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
+                GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+
+                GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTexRGB);
+                GLES20.glUniform1i(GLES20.glGetUniformLocation(mRgbProgram, "sTextureRGB"), 0);
+                GLES20.glUniform1f(GLES20.glGetUniformLocation(mRgbProgram, "uRgbScale"), mRgbSampleScale);
+
+                int positionHandle = GLES20.glGetAttribLocation(mRgbProgram, "aPosition");
+                GLES20.glEnableVertexAttribArray(positionHandle);
+                GLES20.glVertexAttribPointer(
+                                positionHandle, COORDS_PER_VERTEX,
+                                GLES20.GL_FLOAT, false,
+                                vertexStride, vertexBuffer);
+
+                int maTextureHandle = GLES20.glGetAttribLocation(mRgbProgram, "aTextureCoord");
+                GLES20.glVertexAttribPointer(
+                                maTextureHandle, 2,
+                                GLES20.GL_FLOAT, false,
+                                0, uvBuffer);
+                GLES20.glEnableVertexAttribArray(maTextureHandle);
+
+                GLES20.glDrawElements(
+                                GLES20.GL_TRIANGLES, drawOrder.length,
+                                GLES20.GL_UNSIGNED_SHORT, drawListBuffer);
+                Utils.checkGlError("drawRGB glDrawElements");
+
+                GLES20.glDisableVertexAttribArray(positionHandle);
+                GLES20.glDisableVertexAttribArray(maTextureHandle);
+
+                GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+
+                if (!m_CanUseGLBindVertexArray && lastBindeVAO != 0) {
+                        GLES30.glBindVertexArray(lastBindeVAO);
+                }
+
+                if (isDepthTest)
+                        GLES20.glEnable(GLES20.GL_DEPTH_TEST);
+                if (isCullFace)
+                        GLES20.glEnable(GLES20.GL_CULL_FACE);
+                if (isScissorTest)
+                        GLES20.glEnable(GLES20.GL_SCISSOR_TEST);
+
+                GLES20.glActiveTexture(lastActiveTexture[0]);
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, lastTexture[0]);
+                GLES20.glUseProgram(lastProgram[0]);
+        }
+
         @Override
         public void destory() {
                 int[] texs = { mTexY, mTexU, mTexV };
@@ -239,6 +414,14 @@ public class Texture2DExtYUV extends Texture2DExt {
                 mTexY = 0;
                 mTexU = 0;
                 mTexV = 0;
+                if (mTexRGB != 0) {
+                        GLES20.glDeleteTextures(1, new int[] { mTexRGB }, 0);
+                        mTexRGB = 0;
+                }
+                if (mRgbProgram != 0) {
+                        GLES20.glDeleteProgram(mRgbProgram);
+                        mRgbProgram = 0;
+                }
                 super.destory();
         }
 }

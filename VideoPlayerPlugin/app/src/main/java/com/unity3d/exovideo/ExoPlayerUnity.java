@@ -14,6 +14,7 @@ import android.graphics.SurfaceTexture;
 import android.media.Image;
 import android.media.ImageReader;
 import android.graphics.ImageFormat;
+import android.graphics.PixelFormat;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Rect;
@@ -51,6 +52,9 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
 
     boolean m_UseImageReader = false;
     ImageReader mVideImageReader;
+    // ImageReader 当前配置的格式。默认 YUV_420_888；若在 Android 15 上出现格式不匹配，
+    // 会自动回退到 RGBA_8888（兼容性更好，多数模拟器解码器可输出/转换为该格式）。
+    int m_ImageReaderFormat = ImageFormat.YUV_420_888;
 
     float[] mSurfaceTextureMat = new float[16];
 
@@ -158,6 +162,11 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
             if (isEmulator()) {
                 Log.d(TAG, "Detected Emulator, Force Enable ImageReader mode");
                 theClass.m_UseImageReader = true;
+                // MuMu 等模拟器上解码器直接输出 RGB_565(0x4)，若仍用 YUV_420_888(0x23)
+                // 会在 Android 15 上触发格式校验崩溃/无画面。这里直接以 RGB_565 建 ImageReader。
+                if (Build.VERSION.SDK_INT >= 15) {
+                    theClass.m_ImageReaderFormat = PixelFormat.RGB_565;
+                }
             }
 
             if (bOverride) {
@@ -322,7 +331,8 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
             // 确保使用有效的尺寸
             int width = GetWidth();
             int height = GetHeight();
-
+            if (width <= 0 || height <= 0)
+                return;
             if (m_UseImageReader) {
                 if (mVideImageReader == null) {
                     // Log.d(TAG, "Render: mVideImageReader is null, recreating surface");
@@ -402,7 +412,18 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
             mNewFrameAvailable = false;
             m_iNumberFramesAvailable = 0;
             if (mVideImageReader != null) {
-                Image image = mVideImageReader.acquireLatestImage();
+                Image image = null;
+                try {
+                    image = mVideImageReader.acquireLatestImage();
+                } catch (UnsupportedOperationException e) {
+                    Log.e(TAG, "UpdateImageReaderFrame: format mismatch, recreating ImageReader: " + e.getMessage());
+                    RecreateImageReaderWithFormat();
+                    return;
+                } catch (IllegalStateException e) {
+                    // 缓冲区已耗尽等临时状态，跳过本帧即可。
+                    Log.e(TAG, "UpdateImageReaderFrame: acquire failed: " + e.getMessage());
+                    return;
+                }
 
                 if (image != null) {
                     try {
@@ -420,6 +441,35 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                 }
             }
         }
+    }
+
+    // 出现格式不匹配时，依次尝试生产者可能使用的格式并重建表面。
+    // 候选顺序：RGB_565(模拟器解码器常见) -> YUV_420_888(真机常见) -> RGBA_8888(兜底)。
+
+    private int m_FormatFallbackAttempt = 0;
+
+    private void RecreateImageReaderWithFormat() {
+        // 找到一个与当前不同、且尚未用尽的候选格式
+        int next = -1;
+        while (m_FormatFallbackAttempt < IMAGE_READER_FORMAT_CANDIDATES.length) {
+            int candidate = IMAGE_READER_FORMAT_CANDIDATES[m_FormatFallbackAttempt++];
+            if (candidate != m_ImageReaderFormat) {
+                next = candidate;
+                break;
+            }
+        }
+        if (next < 0) {
+            // 所有候选格式都试过仍失败，直接跳过本帧，避免死循环重建。
+            return;
+        }
+        m_ImageReaderFormat = next;
+        int width = GetWidth();
+        int height = GetHeight();
+        if (width <= 0 || height <= 0)
+            return;
+        CreateExoSurface(width, height);
+        AttackSurface();
+        Log.d(TAG, "RecreateImageReaderWithFormat: switched to format 0x" + Integer.toHexString(next));
     }
 
     private void checkGlError(String op) {
@@ -511,19 +561,19 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
 
     void RenderImageNoGL(Image image) {
         try {
-            Image.Plane[] planes = image.getPlanes();
-            if (planes.length < 3)
-                return;
-
             int width = image.getWidth();
             int height = image.getHeight();
+            int format = image.getFormat();
+            Image.Plane[] planes = image.getPlanes();
+            if (planes.length < 1)
+                return;
 
             if (mUnityTexture == null) {
                 mUnityTexture = new Texture2D(myContext, GetWidth(), GetHeight(), m_bCanUseGLBindVertexArray);
                 mFBO = new FBO(mUnityTexture);
             }
 
-            // 确保YUV纹理存在且尺寸正确
+            // 确保YUV/RGB纹理存在且尺寸正确
             if (mTexture2DExtRGBA == null || mTexture2DExtRGBA.getWidth() != width
                     || mTexture2DExtRGBA.getHeight() != height) {
                 if (mTexture2DExtRGBA != null)
@@ -534,20 +584,41 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
             if (this.unityMessage != null)
                 this.unityMessage.OnVideoRenderBegin(this.m_nPlayIndex);
 
-            // 直接上传 Y/U/V 三个平面，YUV->RGB 转换交给 GPU（片元着色器），
-            // 省去 CPU 逐像素的浮点转换。
-            mTexture2DExtRGBA.updateYUV(width, height,
-                    planes[0].getBuffer(), planes[1].getBuffer(), planes[2].getBuffer(),
-                    planes[0].getRowStride(), planes[1].getRowStride(), planes[1].getPixelStride());
+            boolean uploaded = false;
+            if (format == ImageFormat.YUV_420_888) {
+                if (planes.length >= 3) {
+                    // 直接上传 Y/U/V 三个平面，YUV->RGB 转换交给 GPU（片元着色器）。
+                    mTexture2DExtRGBA.updateYUV(width, height,
+                            planes[0].getBuffer(), planes[1].getBuffer(), planes[2].getBuffer(),
+                            planes[0].getRowStride(), planes[1].getRowStride(), planes[1].getPixelStride());
+                    uploaded = true;
+                }
+            } else if (format == PixelFormat.RGB_565) {
+                mTexture2DExtRGBA.updateRGB565(width, height,
+                        planes[0].getBuffer(), planes[0].getRowStride());
+                uploaded = true;
+            } else if (format == PixelFormat.RGBA_8888 || format == PixelFormat.RGBX_8888) {
+                mTexture2DExtRGBA.updateRGBA8888(width, height,
+                        planes[0].getBuffer(), planes[0].getRowStride());
+                uploaded = true;
+            } else {
+                Log.e(TAG, "RenderImageNoGL: unsupported image format 0x" + Integer.toHexString(format));
+            }
 
-            // 通过 FBO 把 YUV 转换结果渲染到 Unity 使用的纹理上
-            mFBO.FBOBegin();
-            GLES20.glViewport(0, 0, width, height);
-            GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-            Matrix.setIdentityM(mSurfaceTextureMat, 0);
-            mTexture2DExtRGBA.draw(mSurfaceTextureMat, false);
-            mFBO.FBOEnd();
+            if (uploaded) {
+                // 通过 FBO 把结果渲染到 Unity 使用的纹理上
+                mFBO.FBOBegin();
+                GLES20.glViewport(0, 0, width, height);
+                GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+                Matrix.setIdentityM(mSurfaceTextureMat, 0);
+                if (format == ImageFormat.YUV_420_888) {
+                    mTexture2DExtRGBA.draw(mSurfaceTextureMat, false);
+                } else {
+                    mTexture2DExtRGBA.drawRGB();
+                }
+                mFBO.FBOEnd();
+            }
 
             if (this.unityMessage != null)
                 this.unityMessage.OnVideoRenderEnd(this.m_nPlayIndex);
@@ -623,7 +694,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
             if (m_UseImageReader) {
                 // 使用ImageReader模式
                 // Log.d(TAG, "CreateExoSurface: Using ImageReader mode");
-                mVideImageReader = ImageReader.newInstance(width, height, ImageFormat.YUV_420_888, 2);
+                mVideImageReader = ImageReader.newInstance(width, height, m_ImageReaderFormat, 2);
                 mVideImageReader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
                     @Override
                     public void onImageAvailable(ImageReader reader) {
