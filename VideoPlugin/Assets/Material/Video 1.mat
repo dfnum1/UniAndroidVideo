@@ -74,6 +74,7 @@ Material:
     - _DetailNormalMapScale: 1
     - _DstBlend: 0
     - _EdgeFactor: 0.88
+    - _EdgeFeatherFade: 0
     - _EdgeSoft: 1
     - _GlossMapScale: 1
     - _Glossiness: 0.5
@@ -104,5 +105,6 @@ Material:
     - _ZWrite: 1
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _EdgeCliper: {r: 0, g: 0, b: 0, a: 0}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
   m_BuildTextureStacks: []

@@ -59,6 +59,10 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     float[] mSurfaceTextureMat = new float[16];
 
     int m_TextureHandle = 0;
+    // GL 资源重建代数，每次 DestroyGl 自增。
+    // GL 会复用已删除的纹理 id，Unity 侧仅凭 id 数值无法发现纹理已被重建，
+    // 需要靠 revision 变化强制重新 CreateExternalTexture，避免一直黑屏。
+    int m_TextureRevision = 0;
 
     VideoPlayer videoPlayer;
     int m_nPlayIndex;
@@ -234,9 +238,17 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     }
 
     public int GetTextureHandle() {
+        // 只返回最终渲染目标纹理（GL_TEXTURE_2D）。
+        // 不能回退返回 m_TextureHandle：它是 SurfaceTexture 使用的
+        // GL_TEXTURE_EXTERNAL_OES 纹理，Unity 会按 GL_TEXTURE_2D 绑定它，
+        // 导致 glBindTexture GL_INVALID_OPERATION(1282) 黑屏。
         if (mUnityTexture != null)
             return mUnityTexture.getTextureID();
-        return m_TextureHandle;
+        return 0;
+    }
+
+    public int GetTextureRevision() {
+        return m_TextureRevision;
     }
 
     private Handler getHandler() {
@@ -336,7 +348,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
             if (m_UseImageReader) {
                 if (mVideImageReader == null) {
                     // Log.d(TAG, "Render: mVideImageReader is null, recreating surface");
-                    CreateExoSurface(width, height);
+                    RecreateSurfaceAndAttach(width, height);
                     return;
                 }
                 // Log.d(TAG, "Render: Using ImageReader mode");
@@ -344,7 +356,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
             } else {
                 if (surfaceTexture == null) {
                     Log.d(TAG, "Render: surfaceTexture is null, recreating surface");
-                    CreateExoSurface(width, height);
+                    RecreateSurfaceAndAttach(width, height);
                     return;
                 }
                 // Log.d(TAG, "Render: Using SurfaceTexture mode, textureHandle=" +
@@ -393,7 +405,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                         Log.d(TAG, "UpdateSurfaceTexture: OpenGL error, recreating surface");
                         int width = GetWidth();
                         int height = GetHeight();
-                        CreateExoSurface(width, height);
+                        RecreateSurfaceAndAttach(width, height);
                     }
                 }
             } else {
@@ -447,7 +459,9 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     // 候选顺序：RGB_565(模拟器解码器常见) -> YUV_420_888(真机常见) -> RGBA_8888(兜底)。
 
     private int m_FormatFallbackAttempt = 0;
-
+    private static final int[] IMAGE_READER_FORMAT_CANDIDATES = {
+            PixelFormat.RGB_565, ImageFormat.YUV_420_888, PixelFormat.RGBA_8888
+    };
     private void RecreateImageReaderWithFormat() {
         // 找到一个与当前不同、且尚未用尽的候选格式
         int next = -1;
@@ -736,6 +750,47 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         // Log.d(TAG, "CreateExoSurface: Completed");
     }
 
+    // 重建解码输出表面并重新绑定到播放器（渲染线程调用）。
+    // 旧表面的解绑/释放由 DestroySurface 投递到主线程 Handler 串行执行，
+    // 先于这里投递的重新绑定完成，因此顺序是安全的。
+    private void RecreateSurfaceAndAttach(final int width, final int height) {
+        CreateExoSurface(width, height);
+        getHandler().post(new Runnable() {
+            @Override
+            public void run() {
+                if (videoPlayer == null)
+                    return;
+                if (!m_UseImageReader && surfaceTexture != null) {
+                    if (mySurface != null)
+                        mySurface.release();
+                    mySurface = new Surface(surfaceTexture);
+                }
+                if (mySurface != null) {
+                    videoPlayer.AttackSurface(mySurface);
+                }
+            }
+        });
+    }
+
+    // Unity 图形设备销毁（EGL context 失效）时的回调，由 native 在渲染线程调用。
+    // 旧 context 中的纹理/FBO 句柄已随 context 失效，这里清空 GL 与解码表面资源，
+    // 之后 Render 会在新 context 中自动重建；m_TextureRevision 自增会促使
+    // Unity 侧重新 CreateExternalTexture，避免旧纹理 id 失效导致的黑屏。
+    public static void OnGraphicsDeviceShutdown() {
+        if (s_AllPlayers == null)
+            return;
+        try {
+            for (ExoPlayerUnity player : s_AllPlayers.values()) {
+                if (player != null) {
+                    player.DestroySurface();
+                    player.DestroyGl();
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "OnGraphicsDeviceShutdown Exception: " + e.getMessage());
+        }
+    }
+
     @Override
     public void onFrameAvailable(SurfaceTexture st) {
         synchronized (this) {
@@ -832,6 +887,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         mTexture2DExtRGBA = null;
 
         m_TextureHandle = 0;
+        m_TextureRevision++;
     }
 
     private void DestroySurface() {

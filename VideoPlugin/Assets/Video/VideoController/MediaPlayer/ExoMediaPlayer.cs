@@ -75,6 +75,7 @@ namespace GameApp.Media
         protected AndroidJavaObject			m_Video;
 		private Texture2D					m_Texture;
         private int                         m_TextureHandle;
+        private int                         m_TextureRevision = -1;
 		private bool						m_UseFastOesPath;
 
 		private float						m_DurationMs		= 0.0f;
@@ -921,6 +922,10 @@ namespace GameApp.Media
                 if(m_bResumeCall)
                 {
                     m_bResumeCall = false;
+                    // Resume 会销毁并重建 Java 侧全部 GL 资源，GL 可能复用相同的纹理 id，
+                    // 这里强制清空缓存，确保恢复后必定重新创建外部纹理，避免黑屏
+                    m_TextureHandle = 0;
+                    m_TextureRevision = -1;
                     IssuePluginEvent(Native.ExoPlayerEvent.Resume, m_iPlayerIndex);
                     return;
                 }
@@ -955,7 +960,10 @@ namespace GameApp.Media
                 }
 
                 int textureHandle = m_Video.Call<int>("GetTextureHandle");
-                if (textureHandle > 0 && textureHandle != m_TextureHandle )
+                int textureRevision = m_Video.Call<int>("GetTextureRevision");
+                // 除了纹理 id 变化，Java 侧 GL 资源重建（revision 变化）也必须重建外部纹理：
+                // GL 会复用已删除的纹理 id，仅比较 id 数值会漏掉重建，导致一直黑屏
+                if (textureHandle > 0 && (textureHandle != m_TextureHandle || textureRevision != m_TextureRevision))
 				{
 					// Already got? (from above)
 					if( newWidth == -1 || newHeight == -1 )
@@ -968,12 +976,14 @@ namespace GameApp.Media
 						m_Width = newWidth;
 						m_Height = newHeight;
 	                    m_TextureHandle = textureHandle;
+	                    m_TextureRevision = textureRevision;
 					}
 					else if( newWidth > 0 && newHeight > 0 )
 					{
 						m_Width = newWidth;
 						m_Height = newHeight;
 	                    m_TextureHandle = textureHandle;
+	                    m_TextureRevision = textureRevision;
 
 						_playerDescription = "MediaPlayer";
 

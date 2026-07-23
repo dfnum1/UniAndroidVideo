@@ -112,6 +112,30 @@ static void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType ev
     {
         s_DeviceType = s_Graphics->GetRenderer();
     }
+    else if (eventType == kUnityGfxDeviceEventShutdown)
+    {
+        // EGL context 即将销毁：通知 Java 层清空全部 GL 与解码表面资源，
+        // 使其在设备重建后自动重建（本回调在渲染线程执行，此时 context 仍有效）
+        JNIEnv* env = getEnv();
+        if (env != nullptr)
+        {
+            jclass cls = findClass("com.unity3d.exovideo.ExoPlayerUnity");
+            if (cls != nullptr)
+            {
+                jmethodID mid = env->GetStaticMethodID(cls, "OnGraphicsDeviceShutdown", "()V");
+                if (mid != nullptr)
+                {
+                    env->CallStaticVoidMethod(cls, mid);
+                }
+                env->DeleteLocalRef(cls);
+            }
+            // findClass/GetStaticMethodID 失败会挂起异常，这里清理避免影响后续 JNI 调用
+            if (env->ExceptionCheck())
+            {
+                env->ExceptionClear();
+            }
+        }
+    }
     if(g_InvBridgeInterface.pDeviceEvent !=NULL)
         g_InvBridgeInterface.pDeviceEvent((int)eventType);
 }
@@ -330,4 +354,25 @@ extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API DestroyVideoSurface(i
 extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API GetRenderEventFunc()
 {
     return OnRenderEvent;
+}
+
+extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API UnityPluginLoad(IUnityInterfaces* unityInterfaces)
+{
+    s_UnityInterfaces = unityInterfaces;
+    s_Graphics = unityInterfaces->Get<IUnityGraphics>();
+    if (s_Graphics != NULL)
+    {
+        // 注册图形设备事件回调，用于感知 EGL context 销毁并通知 Java 层清理 GL 资源
+        s_Graphics->RegisterDeviceEventCallback(OnGraphicsDeviceEvent);
+    }
+}
+
+extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API UnityPluginUnload()
+{
+    if (s_Graphics != NULL)
+    {
+        s_Graphics->UnregisterDeviceEventCallback(OnGraphicsDeviceEvent);
+        s_Graphics = NULL;
+    }
+    s_UnityInterfaces = NULL;
 }
