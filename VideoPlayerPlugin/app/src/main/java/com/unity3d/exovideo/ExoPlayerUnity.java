@@ -173,11 +173,11 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
 
             if (isEmulator()) {
                 Log.d(TAG, "Detected Emulator, Force Enable ImageReader mode");
-                theClass.m_UseImageReader = true;
+           //     theClass.m_UseImageReader = true;
                 // MuMu 等模拟器上解码器直接输出 RGB_565(0x4)，若仍用 YUV_420_888(0x23)
                 // 会在 Android 15 上触发格式校验崩溃/无画面。这里直接以 RGB_565 建 ImageReader。
                 if (Build.VERSION.SDK_INT >= 15) {
-                    theClass.m_ImageReaderFormat = PixelFormat.RGB_565;
+            //        theClass.m_ImageReaderFormat = PixelFormat.RGB_565;
                 }
             }
 
