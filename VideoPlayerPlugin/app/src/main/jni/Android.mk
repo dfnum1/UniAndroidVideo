@@ -5,7 +5,15 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := CorePlus
 					
 #-D_USE_DEBUG_LOG
-LOCAL_CFLAGS    :=-D_ANDROID_PLATFORM -D_ANDROID -DLUA_USE_LINUX \
+LOCAL_CFLAGS    :=-D_ANDROID_PLATFORM -D_ANDROID -DLUA_USE_LINUX
+
+# ARM NEON 宏：仅在 armeabi-v7a 和 arm64-v8a 上开启
+ifeq ($(TARGET_ARCH_ABI),armeabi-v7a)
+LOCAL_CFLAGS += -D__ARM_NEON__
+endif
+ifeq ($(TARGET_ARCH_ABI),arm64-v8a)
+LOCAL_CFLAGS += -D__ARM_NEON__
+endif
 
 define finder_cpp
 $(wildcard $(1)) $(foreach e, $(wildcard $(1)/*), $(call finder_cpp, $(e)))

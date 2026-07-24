@@ -12,6 +12,9 @@
 #ifdef _ANDROID
 #include <android/api-level.h>
 #include <android/log.h>
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+#include <arm_neon.h>
+#endif
 #endif
 
 typedef void	(*ENGINE_PLUGIN_RENDER_EVENT)( int );
