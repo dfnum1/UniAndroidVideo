@@ -61,7 +61,7 @@ Java_com_unity3d_exovideo_ExoPlayerUnity_nativeYuvToRgba(
     const int16x8_t vC731  = vdupq_n_s16(731);
     const int16x8_t vC1815 = vdupq_n_s16(1815);
     const int16x8_t vC128  = vdupq_n_s16(128);
-    const int16x8_t vC512  = vdupq_n_s16(512);
+    const int32x4_t vC512_32 = vdupq_n_s32(512);  // 32-bit 版本，用于 32-bit 累加
     const uint8x8_t vAlpha = vdup_n_u8(255);
 
     for (int i = 0; i < height; i++) {
@@ -76,22 +76,36 @@ Java_com_unity3d_exovideo_ExoPlayerUnity_nativeYuvToRgba(
             uint8x8_t y8 = vld1_u8(yBuf + yRowBase + j);
 
             // 计算 UV 索引：每个 UV 对应 2x2 像素块
-            // YUV420 中 UV 分辨率减半
+            // YUV420 中 UV 分辨率减半，8 个 Y 像素只需要 4 组 UV
             int uvBase = uvRowBase + (j >> 1) * uvPixelStride;
 
             // 加载 U, V 值（uvPixelStride 通常为 1 或 2）
+            // 关键：只加载 4 个 UV 值，然后每个复制一份给相邻的两个 Y 像素
             uint8x8_t u8, v8;
             if (uvPixelStride == 1) {
                 // 紧凑布局：U 和 V 平面各自连续
-                u8 = vld1_u8(uBuf + uvBase);
-                v8 = vld1_u8(vBuf + uvBase);
+                // 加载 8 个 UV 值，但只使用前 4 个（对应 8 个 Y 像素）
+                // 需要将 4 个 UV 值每个复制一份：U[0],U[0],U[1],U[1],U[2],U[2],U[3],U[3]
+                uint8x8_t u4 = vld1_u8(uBuf + uvBase);
+                uint8x8_t v4 = vld1_u8(vBuf + uvBase);
+                // vzip_u8(a, b) 返回 {a[0],b[0],a[1],b[1],...}
+                // 用 vzip_u8(u4, u4) 得到 {u4[0],u4[0],u4[1],u4[1],...}
+                uint8x8x2_t u_zipped = vzip_u8(u4, u4);
+                uint8x8x2_t v_zipped = vzip_u8(v4, v4);
+                u8 = u_zipped.val[0];
+                v8 = v_zipped.val[0];
             } else {
-                // 隔行布局（少见，仅作兼容）
+                // 隔行布局（uvPixelStride >= 2）
+                // 手动加载 4 个 UV 值，每个复制一份
                 uint8_t utmp[8], vtmp[8];
-                for (int k = 0; k < 8; k++) {
-                    int idx = (k >> 1) * uvPixelStride;
-                    utmp[k] = uBuf[uvBase + idx];
-                    vtmp[k] = vBuf[uvBase + idx];
+                for (int k = 0; k < 4; k++) {
+                    int idx = k * uvPixelStride;
+                    uint8_t uVal = uBuf[uvBase + idx];
+                    uint8_t vVal = vBuf[uvBase + idx];
+                    utmp[k * 2]     = uVal;
+                    utmp[k * 2 + 1] = uVal;
+                    vtmp[k * 2]     = vVal;
+                    vtmp[k * 2 + 1] = vVal;
                 }
                 u8 = vld1_u8(utmp);
                 v8 = vld1_u8(vtmp);
@@ -109,22 +123,22 @@ Java_com_unity3d_exovideo_ExoPlayerUnity_nativeYuvToRgba(
             // R = Y + ((V * 1436 + 512) >> 10)
             int32x4_t vr_lo = vmull_s16(vget_low_s16(vs), vget_low_s16(vC1436));
             int32x4_t vr_hi = vmull_s16(vget_high_s16(vs), vget_high_s16(vC1436));
-            vr_lo = vaddq_s32(vr_lo, vreinterpretq_s32_s16(vC512));
-            vr_hi = vaddq_s32(vr_hi, vreinterpretq_s32_s16(vC512));
+            vr_lo = vaddq_s32(vr_lo, vC512_32);
+            vr_hi = vaddq_s32(vr_hi, vC512_32);
             int16x8_t vr = vcombine_s16(vshrn_n_s32(vr_lo, 10), vshrn_n_s32(vr_hi, 10));
             int16x8_t r16 = vaddq_s16(y16, vr);
 
             // G = Y - ((U * 352 + 512) >> 10) - ((V * 731 + 512) >> 10)
             int32x4_t ug_lo = vmull_s16(vget_low_s16(us), vget_low_s16(vC352));
             int32x4_t ug_hi = vmull_s16(vget_high_s16(us), vget_high_s16(vC352));
-            ug_lo = vaddq_s32(ug_lo, vreinterpretq_s32_s16(vC512));
-            ug_hi = vaddq_s32(ug_hi, vreinterpretq_s32_s16(vC512));
+            ug_lo = vaddq_s32(ug_lo, vC512_32);
+            ug_hi = vaddq_s32(ug_hi, vC512_32);
             int16x8_t ug = vcombine_s16(vshrn_n_s32(ug_lo, 10), vshrn_n_s32(ug_hi, 10));
 
             int32x4_t vg_lo = vmull_s16(vget_low_s16(vs), vget_low_s16(vC731));
             int32x4_t vg_hi = vmull_s16(vget_high_s16(vs), vget_high_s16(vC731));
-            vg_lo = vaddq_s32(vg_lo, vreinterpretq_s32_s16(vC512));
-            vg_hi = vaddq_s32(vg_hi, vreinterpretq_s32_s16(vC512));
+            vg_lo = vaddq_s32(vg_lo, vC512_32);
+            vg_hi = vaddq_s32(vg_hi, vC512_32);
             int16x8_t vg = vcombine_s16(vshrn_n_s32(vg_lo, 10), vshrn_n_s32(vg_hi, 10));
 
             int16x8_t g16 = vsubq_s16(vsubq_s16(y16, ug), vg);
@@ -132,8 +146,8 @@ Java_com_unity3d_exovideo_ExoPlayerUnity_nativeYuvToRgba(
             // B = Y + ((U * 1815 + 512) >> 10)
             int32x4_t ub_lo = vmull_s16(vget_low_s16(us), vget_low_s16(vC1815));
             int32x4_t ub_hi = vmull_s16(vget_high_s16(us), vget_high_s16(vC1815));
-            ub_lo = vaddq_s32(ub_lo, vreinterpretq_s32_s16(vC512));
-            ub_hi = vaddq_s32(ub_hi, vreinterpretq_s32_s16(vC512));
+            ub_lo = vaddq_s32(ub_lo, vC512_32);
+            ub_hi = vaddq_s32(ub_hi, vC512_32);
             int16x8_t ub = vcombine_s16(vshrn_n_s32(ub_lo, 10), vshrn_n_s32(ub_hi, 10));
             int16x8_t b16 = vaddq_s16(y16, ub);
 
@@ -225,10 +239,11 @@ Java_com_unity3d_exovideo_ExoPlayerUnity_nativeRgb565ToRgba(
             r8 = vorrq_u16(r8, r_extra);                      // 000R RRRR RRRR
 
             // G: 右移 5 提取, 左移 2, 高位复制
-            uint16x8_t g6 = vshrq_n_u16(pixels, 5);           // 0000 0GGG GGGG G
-            uint16x8_t g8 = vshlq_n_u16(g6, 2);               // 0GGG GGGG G00
-            uint16x8_t g_extra = vshrq_n_u16(g6, 4);          // 0000 0000 0000 0GG
-            g8 = vorrq_u16(g8, g_extra);                      // 0GGG GGGG GGGG
+            // 注意：>>5 后高位混入了 R 分量，需先 &0x3F 隔离 G 的 6 位
+            uint16x8_t g6 = vandq_u16(vshrq_n_u16(pixels, 5), vdupq_n_u16(0x3F));
+            uint16x8_t g8 = vshlq_n_u16(g6, 2);               // GGGGGG00
+            uint16x8_t g_extra = vshrq_n_u16(g6, 4);          // 000000GG
+            g8 = vorrq_u16(g8, g_extra);                      // GGGGGGGG
 
             // B: 低 5 位, 左移 3, 高位复制
             uint16x8_t b5 = vandq_u16(pixels, vdupq_n_u16(0x1F));

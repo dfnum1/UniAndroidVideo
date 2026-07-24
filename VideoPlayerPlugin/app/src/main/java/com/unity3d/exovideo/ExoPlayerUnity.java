@@ -37,6 +37,24 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     // Unity Class Defaults
     private static final String TAG = "ExoPlayerUnity";
 
+    // ========== JNI Native 方法（NEON 汇编级加速） ==========
+    // YUV_420_888 → RGBA_8888 转换（ARM NEON SIMD）
+    private static native void nativeYuvToRgba(ByteBuffer yBuf, ByteBuffer uBuf, ByteBuffer vBuf,
+            byte[] outData, int width, int height,
+            int yRowStride, int uvRowStride, int uvPixelStride);
+    // RGB_565 → RGBA_8888 转换（ARM NEON SIMD）
+    private static native void nativeRgb565ToRgba(ByteBuffer inBuf, byte[] outData,
+            int width, int height, int rowStride);
+
+    static {
+        try {
+            System.loadLibrary("RenderingPlugin");
+            Log.d(TAG, "Loaded native RenderingPlugin library for NEON accelerated YUV→RGBA");
+        } catch (UnsatisfiedLinkError e) {
+            Log.w(TAG, "Failed to load RenderingPlugin library, will use Java fallback: " + e.getMessage());
+        }
+    }
+
     private Context myContext;
     public Handler handler;
     public File downloadDirectory;
@@ -51,6 +69,11 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     Surface mySurface;
 
     private byte[] mCachedBodyData = null;
+    // 可复用的行缓存，避免每帧 GC 分配
+    private byte[] m_RowCacheY = null;
+    private byte[] m_RowCacheU = null;
+    private byte[] m_RowCacheV = null;
+    private short[] m_RowCacheShort = null;
 
     boolean m_UseImageVulkan = false;
     boolean m_UseImageReader = false;
@@ -776,148 +799,145 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
             }
             byte[] data = mCachedBodyData;
 
+            boolean converted = false;
+
             if (format == PixelFormat.RGB_565 && planes.length >= 1) {
-                // RGB_565 格式：每个像素 2 字节，布局 RRRRR GGGGGG BBBBB（小端序）
-                // 直接解码为 RGBA_8888
                 ByteBuffer buf = planes[0].getBuffer();
                 int rowStride = planes[0].getRowStride();
-                byte[] row = new byte[Math.max(rowStride, width * 2)];
 
-                for (int i = 0; i < height; i++) {
-                    int invertedRowIndex = (height - 1 - i) * width;
-                    int destRowBase = invertedRowIndex << 2;
-                    int rowBase = i * rowStride;
-
-                    buf.position(rowBase);
-                    buf.get(row, 0, Math.min(rowStride, buf.remaining()));
-
-                    for (int j = 0; j < width; j++) {
-                        int pixelOffset = j << 1;
-                        int pixel = (row[pixelOffset] & 0xFF) | ((row[pixelOffset + 1] & 0xFF) << 8);
-
-                        // RGB_565 拆分为 R/G/B
-                        int r5 = (pixel >> 11) & 0x1F;
-                        int g6 = (pixel >> 5) & 0x3F;
-                        int b5 = pixel & 0x1F;
-
-                        // 扩展为 8 位：高位复制到低位
-                        int r = (r5 << 3) | (r5 >> 2);
-                        int g = (g6 << 2) | (g6 >> 4);
-                        int b = (b5 << 3) | (b5 >> 2);
-
-                        int base = destRowBase + (j << 2);
-                        data[base]     = (byte) r;
-                        data[base + 1] = (byte) g;
-                        data[base + 2] = (byte) b;
-                        data[base + 3] = (byte) 255;
+                // 优先使用 JNI NEON 加速
+                try {
+                    nativeRgb565ToRgba(buf, data, width, height, rowStride);
+                    converted = true;
+                } catch (UnsatisfiedLinkError e) {
+                    // JNI 未加载，走 Java 回退
+                }
+                if (!converted) {
+                    // Java 回退：ShortBuffer 批量读取（复用行缓存）
+                    java.nio.ShortBuffer shortBuf = buf.order(java.nio.ByteOrder.LITTLE_ENDIAN).asShortBuffer();
+                    int rowShorts = rowStride >> 1;
+                    int cacheSize = Math.max(rowShorts, width);
+                    if (m_RowCacheShort == null || m_RowCacheShort.length < cacheSize) {
+                        m_RowCacheShort = new short[cacheSize];
+                    }
+                    short[] sRow = m_RowCacheShort;
+                    for (int i = 0; i < height; i++) {
+                        int invertedRowIndex = (height - 1 - i) * width;
+                        int destRowBase = invertedRowIndex << 2;
+                        shortBuf.position(i * rowShorts);
+                        shortBuf.get(sRow, 0, Math.min(rowShorts, shortBuf.remaining()));
+                        for (int j = 0; j < width; j++) {
+                            int pixel = sRow[j] & 0xFFFF;
+                            int r = ((pixel >> 8) & 0xF8) | ((pixel >> 13) & 0x07);
+                            int g = ((pixel >> 3) & 0xFC) | ((pixel >> 9) & 0x03);
+                            int b = ((pixel << 3) & 0xF8) | ((pixel >> 2) & 0x07);
+                            int base = destRowBase + (j << 2);
+                            data[base]     = (byte) r;
+                            data[base + 1] = (byte) g;
+                            data[base + 2] = (byte) b;
+                            data[base + 3] = (byte) 255;
+                        }
                     }
                 }
                 buf.position(0);
+                converted = true;
             } else if (planes.length >= 3) {
-                // YUV_420_888 格式
                 ByteBuffer yBuffer = planes[0].getBuffer();
                 ByteBuffer uBuffer = planes[1].getBuffer();
                 ByteBuffer vBuffer = planes[2].getBuffer();
-
                 int yRowStride = planes[0].getRowStride();
                 int uvRowStride = planes[1].getRowStride();
                 int uvPixelStride = planes[1].getPixelStride();
 
-                // 使用临时数组批量读取一行数据，减少 JNI get() 调用开销
-                byte[] yRow = new byte[width];
-                byte[] uRow = new byte[(width >> 1) + 1];
-                byte[] vRow = new byte[(width >> 1) + 1];
-
-                // 预计算 (channel-128)*coeff 的查找表（BT.601 整数近似）
-                final int[] lutVr = s_LutVr;
-                final int[] lutUg = s_LutUg;
-                final int[] lutVg = s_LutVg;
-                final int[] lutUb = s_LutUb;
-
-                for (int i = 0; i < height; i++) {
-                    int invertedRowIndex = (height - 1 - i) * width;
-                    int uvRowBase = (i >> 1) * uvRowStride;
-                    int yRowBase = i * yRowStride;
-                    int destRowBase = invertedRowIndex << 2;
-
-                    // 批量读取 Y 行
-                    yBuffer.position(yRowBase);
-                    yBuffer.get(yRow, 0, width);
-
-                    // 批量读取 UV 行（只在 i 为偶数时刷新，奇数行复用上一行的 UV）
-                    if ((i & 1) == 0) {
-                        int uvHalfWidth = (width >> 1) + 1;
-                        uBuffer.position(uvRowBase);
-                        uBuffer.get(uRow, 0, Math.min(uvHalfWidth, uBuffer.remaining()));
-                        vBuffer.position(uvRowBase);
-                        vBuffer.get(vRow, 0, Math.min(uvHalfWidth, vBuffer.remaining()));
-                    }
-
-                    // 主循环：一次处理 4 像素（循环展开）
-                    int j = 0;
-                    int w4 = width & ~3;
-                    for (; j < w4; j += 4) {
-                        int uvIdx0 = (j >> 1) * uvPixelStride;
-                        int uvIdx2 = ((j + 2) >> 1) * uvPixelStride;
-
-                        int u0 = uRow[uvIdx0] & 0xFF;
-                        int v0 = vRow[uvIdx0] & 0xFF;
-                        int u2 = uRow[uvIdx2] & 0xFF;
-                        int v2 = vRow[uvIdx2] & 0xFF;
-
-                        int vr0 = lutVr[v0], ug0 = lutUg[u0], vg0 = lutVg[v0], ub0 = lutUb[u0];
-                        int vr2 = lutVr[v2], ug2 = lutUg[u2], vg2 = lutVg[v2], ub2 = lutUb[u2];
-
-                        // 像素 0
-                        int y0 = yRow[j] & 0xFF;
-                        int base0 = destRowBase + (j << 2);
-                        data[base0]     = (byte) clamp255(y0 + vr0);
-                        data[base0 + 1] = (byte) clamp255(y0 - ug0 - vg0);
-                        data[base0 + 2] = (byte) clamp255(y0 + ub0);
-                        data[base0 + 3] = (byte) 255;
-
-                        // 像素 1
-                        int y1 = yRow[j + 1] & 0xFF;
-                        int base1 = destRowBase + ((j + 1) << 2);
-                        data[base1]     = (byte) clamp255(y1 + vr0);
-                        data[base1 + 1] = (byte) clamp255(y1 - ug0 - vg0);
-                        data[base1 + 2] = (byte) clamp255(y1 + ub0);
-                        data[base1 + 3] = (byte) 255;
-
-                        // 像素 2
-                        int y2 = yRow[j + 2] & 0xFF;
-                        int base2 = destRowBase + ((j + 2) << 2);
-                        data[base2]     = (byte) clamp255(y2 + vr2);
-                        data[base2 + 1] = (byte) clamp255(y2 - ug2 - vg2);
-                        data[base2 + 2] = (byte) clamp255(y2 + ub2);
-                        data[base2 + 3] = (byte) 255;
-
-                        // 像素 3
-                        int y3 = yRow[j + 3] & 0xFF;
-                        int base3 = destRowBase + ((j + 3) << 2);
-                        data[base3]     = (byte) clamp255(y3 + vr2);
-                        data[base3 + 1] = (byte) clamp255(y3 - ug2 - vg2);
-                        data[base3 + 2] = (byte) clamp255(y3 + ub2);
-                        data[base3 + 3] = (byte) 255;
-                    }
-
-                    // 尾部剩余像素（0~3 个）
-                    for (; j < width; j++) {
-                        int y = yRow[j] & 0xFF;
-                        int uvIdx = (j >> 1) * uvPixelStride;
-                        int u = uRow[uvIdx] & 0xFF;
-                        int v = vRow[uvIdx] & 0xFF;
-                        int base = destRowBase + (j << 2);
-                        data[base]     = (byte) clamp255(y + lutVr[v]);
-                        data[base + 1] = (byte) clamp255(y - lutUg[u] - lutVg[v]);
-                        data[base + 2] = (byte) clamp255(y + lutUb[u]);
-                        data[base + 3] = (byte) 255;
-                    }
+                // 优先使用 JNI NEON 加速
+                try {
+                    nativeYuvToRgba(yBuffer, uBuffer, vBuffer, data,
+                            width, height, yRowStride, uvRowStride, uvPixelStride);
+                    converted = true;
+                } catch (UnsatisfiedLinkError e) {
+                    // JNI 未加载，走 Java 回退
                 }
-                yBuffer.position(0);
-                uBuffer.position(0);
-                vBuffer.position(0);
-            } else {
+                if (!converted) {
+                    // Java 回退：LUT + 循环展开（单线程，复用行缓存）
+                    int uvCacheSize = (width >> 1) + 1;
+                    if (m_RowCacheY == null || m_RowCacheY.length < width) {
+                        m_RowCacheY = new byte[width];
+                        m_RowCacheU = new byte[uvCacheSize];
+                        m_RowCacheV = new byte[uvCacheSize];
+                    }
+                    byte[] yRow = m_RowCacheY;
+                    byte[] uRow = m_RowCacheU;
+                    byte[] vRow = m_RowCacheV;
+                    final int[] lutVr = s_LutVr, lutUg = s_LutUg, lutVg = s_LutVg, lutUb = s_LutUb;
+
+                    for (int i = 0; i < height; i++) {
+                        int invertedRowIndex = (height - 1 - i) * width;
+                        int uvRowBase = (i >> 1) * uvRowStride;
+                        int yRowBase = i * yRowStride;
+                        int destRowBase = invertedRowIndex << 2;
+
+                        yBuffer.position(yRowBase);
+                        yBuffer.get(yRow, 0, width);
+                        if ((i & 1) == 0) {
+                            int uvHalfWidth = (width >> 1) + 1;
+                            uBuffer.position(uvRowBase);
+                            uBuffer.get(uRow, 0, Math.min(uvHalfWidth, uBuffer.remaining()));
+                            vBuffer.position(uvRowBase);
+                            vBuffer.get(vRow, 0, Math.min(uvHalfWidth, vBuffer.remaining()));
+                        }
+
+                        int j = 0, w4 = width & ~3;
+                        for (; j < w4; j += 4) {
+                            int uvIdx0 = (j >> 1) * uvPixelStride;
+                            int uvIdx2 = ((j + 2) >> 1) * uvPixelStride;
+                            int u0 = uRow[uvIdx0] & 0xFF, v0 = vRow[uvIdx0] & 0xFF;
+                            int u2 = uRow[uvIdx2] & 0xFF, v2 = vRow[uvIdx2] & 0xFF;
+                            int vr0 = lutVr[v0], ug0 = lutUg[u0], vg0 = lutVg[v0], ub0 = lutUb[u0];
+                            int vr2 = lutVr[v2], ug2 = lutUg[u2], vg2 = lutVg[v2], ub2 = lutUb[u2];
+
+                            int base = destRowBase + (j << 2);
+                            int y0 = yRow[j] & 0xFF, y1 = yRow[j + 1] & 0xFF;
+                            int y2 = yRow[j + 2] & 0xFF, y3 = yRow[j + 3] & 0xFF;
+
+                            data[base]     = (byte) clamp255(y0 + vr0);
+                            data[base + 1] = (byte) clamp255(y0 - ug0 - vg0);
+                            data[base + 2] = (byte) clamp255(y0 + ub0);
+                            data[base + 3] = (byte) 255;
+                            int base1 = base + 4;
+                            data[base1]     = (byte) clamp255(y1 + vr0);
+                            data[base1 + 1] = (byte) clamp255(y1 - ug0 - vg0);
+                            data[base1 + 2] = (byte) clamp255(y1 + ub0);
+                            data[base1 + 3] = (byte) 255;
+                            int base2 = base + 8;
+                            data[base2]     = (byte) clamp255(y2 + vr2);
+                            data[base2 + 1] = (byte) clamp255(y2 - ug2 - vg2);
+                            data[base2 + 2] = (byte) clamp255(y2 + ub2);
+                            data[base2 + 3] = (byte) 255;
+                            int base3 = base + 12;
+                            data[base3]     = (byte) clamp255(y3 + vr2);
+                            data[base3 + 1] = (byte) clamp255(y3 - ug2 - vg2);
+                            data[base3 + 2] = (byte) clamp255(y3 + ub2);
+                            data[base3 + 3] = (byte) 255;
+                        }
+                        for (; j < width; j++) {
+                            int y = yRow[j] & 0xFF;
+                            int uvIdx = (j >> 1) * uvPixelStride;
+                            int u = uRow[uvIdx] & 0xFF, v = vRow[uvIdx] & 0xFF;
+                            int base = destRowBase + (j << 2);
+                            data[base]     = (byte) clamp255(y + lutVr[v]);
+                            data[base + 1] = (byte) clamp255(y - lutUg[u] - lutVg[v]);
+                            data[base + 2] = (byte) clamp255(y + lutUb[u]);
+                            data[base + 3] = (byte) 255;
+                        }
+                    }
+                    yBuffer.position(0);
+                    uBuffer.position(0);
+                    vBuffer.position(0);
+                }
+                converted = true;
+            }
+
+            if (!converted) {
                 Log.e(TAG, "RenderImageVulkan: unsupported format 0x" + Integer.toHexString(format)
                         + " with " + planes.length + " planes");
                 return;
