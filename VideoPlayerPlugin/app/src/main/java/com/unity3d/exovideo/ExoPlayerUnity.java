@@ -1,5 +1,5 @@
 package com.unity3d.exovideo;
-
+import java.nio.ByteBuffer;
 import android.os.Build;
 import android.opengl.GLES20;
 import android.opengl.GLES30;
@@ -50,6 +50,9 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     SurfaceTexture surfaceTexture;
     Surface mySurface;
 
+    private byte[] mCachedBodyData = null;
+
+    boolean m_UseImageVulkan = false;
     boolean m_UseImageReader = false;
     ImageReader mVideImageReader;
     // ImageReader 当前配置的格式。默认 YUV_420_888；若在 Android 15 上出现格式不匹配，
@@ -81,6 +84,29 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     boolean mNewFrameAvailable = false;
     int m_iOpenGLVersion = 1;
     boolean m_bCanUseGLBindVertexArray = false;
+
+    // ========== YUV→RGB 查找表（BT.601 整数近似） ==========
+    // 预计算 (channel-128)*coeff 的 clamp 结果，避免每像素做乘加和移位
+    // 索引范围 0~255（对应 channel 的原始值 0~255）
+    private static final int[] s_LutVr = new int[256]; // (v-128)*1436 → R 偏移
+    private static final int[] s_LutUg = new int[256]; // (u-128)*352  → G 减
+    private static final int[] s_LutVg = new int[256]; // (v-128)*731  → G 减
+    private static final int[] s_LutUb = new int[256]; // (u-128)*1815 → B 偏移
+    static {
+        for (int i = 0; i < 256; i++) {
+            int v = i - 128;
+            int u = i - 128;
+            s_LutVr[i] = ((v * 1436 + 512) >> 10);
+            s_LutUg[i] = ((u * 352  + 512) >> 10);
+            s_LutVg[i] = ((v * 731  + 512) >> 10);
+            s_LutUb[i] = ((u * 1815 + 512) >> 10);
+        }
+    }
+
+    // 带 clamp 的加法：result = base + offset，结果钳位到 [0, 255]
+    private static int clamp255(int v) {
+        return (v < 0) ? 0 : ((v > 255) ? 255 : v);
+    }
 
     public static void OnRendererEvent(int eventID) {
         // Log.d(TAG, "OnRendererEventJava: " + eventID);
@@ -151,6 +177,94 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         return false;
     }
 
+    /**
+     * 判断当前 MuMu 模拟器是否使用 Vulkan 作为 Unity 渲染后端。
+     *
+     * 判断策略（按优先级）：
+     * 1. 读取系统属性 ro.kernel.qemu.gles：
+     *    - 值为 "0" 或不存在 → 当前使用 Vulkan 渲染
+     *    - 值为 "1"           → 当前使用 OpenGL ES 渲染
+     * 2. 读取系统属性 ro.kernel.qemu.gl：
+     *    - 包含 "vulkan"（不区分大小写）→ Vulkan 模式
+     * 3. 读取系统属性 debug.renderengine（MuMu 特定）：
+     *    - 包含 "vulkan"（不区分大小写）→ Vulkan 模式
+     * 4. 通过 GLES20.glGetString 获取 GL_RENDERER/VENDOR 辅助判断：
+     *    - MuMu 在 Vulkan 模式下，GLES 通过 Zink/MoltenVK 等方式转译，
+     *      renderer 字符串通常包含 "Mesa" 或 "llvmpipe" 等特征。
+     *
+     * @return true 如果检测到 MuMu 使用 Vulkan 渲染后端
+     */
+    public static boolean isMuMuVulkan() {
+        try {
+            // 方法1: 检查 ro.kernel.qemu.gles —— MuMu 在 Vulkan 模式下该属性为 "0" 或不存在
+            String glesProp = getSystemProperty("ro.kernel.qemu.gles");
+            if (glesProp != null) {
+                if ("0".equals(glesProp)) {
+                    Log.d(TAG, "isMuMuVulkan: ro.kernel.qemu.gles=0 → Vulkan mode");
+                    return true;
+                } else if ("1".equals(glesProp)) {
+                    Log.d(TAG, "isMuMuVulkan: ro.kernel.qemu.gles=1 → OpenGL ES mode");
+                    return false;
+                }
+            }
+
+            // 方法2: 检查 ro.kernel.qemu.gl 是否包含 vulkan
+            String glProp = getSystemProperty("ro.kernel.qemu.gl");
+            if (glProp != null && glProp.toLowerCase().contains("vulkan")) {
+                Log.d(TAG, "isMuMuVulkan: ro.kernel.qemu.gl contains 'vulkan' → Vulkan mode");
+                return true;
+            }
+
+            // 方法3: 检查 MuMu 特定属性 debug.renderengine
+            String renderEngine = getSystemProperty("debug.renderengine");
+            if (renderEngine != null && renderEngine.toLowerCase().contains("vulkan")) {
+                Log.d(TAG, "isMuMuVulkan: debug.renderengine contains 'vulkan' → Vulkan mode");
+                return true;
+            }
+
+            // 方法4: 通过 GL_RENDERER 辅助判断
+            // 在 Unity 渲染线程上执行时，EGL context 已就绪，可以安全调用 GLES20
+            try {
+                String renderer = GLES20.glGetString(GLES20.GL_RENDERER);
+                String vendor = GLES20.glGetString(GLES20.GL_VENDOR);
+                if (renderer != null) {
+                    String lower = renderer.toLowerCase();
+                    // MuMu Vulkan 模式下 GLES 通常通过 Mesa/Zink 转译，renderer 含 "mesa" 或 "llvmpipe"
+                    if (lower.contains("mesa") || lower.contains("llvmpipe")) {
+                        Log.d(TAG, "isMuMuVulkan: GL_RENDERER=" + renderer + " → Vulkan mode (Mesa/Zink)");
+                        return true;
+                    }
+                }
+                if (renderer != null || vendor != null) {
+                    Log.d(TAG, "isMuMuVulkan: GL_RENDERER=" + renderer + ", GL_VENDOR=" + vendor + " → OpenGL ES mode");
+                }
+            } catch (Exception e) {
+                // GLES20 调用可能因 context 未就绪而失败，忽略
+                Log.w(TAG, "isMuMuVulkan: GLES20 query failed: " + e.getMessage());
+            }
+        } catch (Exception ex) {
+            Log.e(TAG, "isMuMuVulkan Exception: " + ex.getMessage());
+        }
+
+        // 默认：无法确定时返回 false（走 OpenGL ES 模式）
+        return false;
+    }
+
+    /**
+     * 通过反射读取 Android 系统属性（SystemProperties）。
+     * 不需要任何特殊权限。
+     */
+    private static String getSystemProperty(String key) {
+        try {
+            Class<?> systemProperties = Class.forName("android.os.SystemProperties");
+            java.lang.reflect.Method get = systemProperties.getMethod("get", String.class);
+            String value = (String) get.invoke(null, key);
+            return value;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public static void RendererSetupPlayer(int playerIndex, int iDeviceIndex) {
         Log.d(TAG, "RendererSetupPlayer" + playerIndex + " DeviceIndex:" + iDeviceIndex);
 
@@ -168,18 +282,25 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                 // ! 使用ImageReader模式
                 // ! 目前在mumu模拟器上开启了这个模式，其余的还是默认
                 Log.d(TAG, "RendererSetupPlayer Use ImageReader mode");
-           //     theClass.m_UseImageReader = true;
+                theClass.m_UseImageReader = true;
+                theClass.m_UseImageVulkan = true;
             }
 
-           // if (isEmulator()) {
-           //     Log.d(TAG, "Detected Emulator, Force Enable ImageReader mode");
-           //     theClass.m_UseImageReader = true;
+            theClass.m_UseImageVulkan = false;
+            if (isEmulator()) {
+                Log.d(TAG, "Detected Emulator, Force Enable ImageReader mode");
+                theClass.m_UseImageReader = true;
                 // MuMu 等模拟器上解码器直接输出 RGB_565(0x4)，若仍用 YUV_420_888(0x23)
                 // 会在 Android 15 上触发格式校验崩溃/无画面。这里直接以 RGB_565 建 ImageReader。
-            //    if (Build.VERSION.SDK_INT >= 15) {
-            //        theClass.m_ImageReaderFormat = PixelFormat.RGB_565;
-            //    }
-            //}
+                if (Build.VERSION.SDK_INT >= 15) {
+                    theClass.m_ImageReaderFormat = PixelFormat.RGB_565;
+                }
+
+                // 判断 MuMu 是否使用 Vulkan 渲染后端
+                // Vulkan 模式下无法使用 GLES 纹理操作，必须走 CPU 侧的 YUV→RGBA 转换路径
+                theClass.m_UseImageVulkan = true;//isMuMuVulkan();
+          //      Log.d(TAG, "Detected Emulator, m_UseImageVulkan=" + theClass.m_UseImageVulkan);
+            }
 
             if (bOverride) {
                 theClass.m_bCanUseGLBindVertexArray = false;// ((theClass.m_iOpenGLVersion > 2) &&
@@ -503,7 +624,9 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                     try {
                         // 处理Image数据并渲染
                         // RenderImageReaderFrame(image);
-                        RenderImageNoGL(image);
+
+                        if(m_UseImageVulkan) RenderImageVulkan(image);
+                        else RenderImageNoGL(image);
                         m_nFrameCount++;
                         if (m_nFrameCount >= 1000000)
                             m_nFrameCount = 2;
@@ -635,6 +758,181 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
 
     }
 
+    void RenderImageVulkan(Image image) {
+        try {
+            if (mUnityTexture == null) {
+                mUnityTexture = new Texture2D(myContext, GetWidth(), GetHeight(), m_bCanUseGLBindVertexArray);
+            }
+            if (this.unityMessage != null)
+                this.unityMessage.OnVideoRenderBegin(this.m_nPlayIndex);
+            Image.Plane[] planes = image.getPlanes();
+            int width = image.getWidth();
+            int height = image.getHeight();
+            int format = image.getFormat();
+
+            // Check and reallocate cache if necessary
+            if (mCachedBodyData == null || mCachedBodyData.length != width * height * 4) {
+                mCachedBodyData = new byte[width * height * 4];
+            }
+            byte[] data = mCachedBodyData;
+
+            if (format == PixelFormat.RGB_565 && planes.length >= 1) {
+                // RGB_565 格式：每个像素 2 字节，布局 RRRRR GGGGGG BBBBB（小端序）
+                // 直接解码为 RGBA_8888
+                ByteBuffer buf = planes[0].getBuffer();
+                int rowStride = planes[0].getRowStride();
+                byte[] row = new byte[Math.max(rowStride, width * 2)];
+
+                for (int i = 0; i < height; i++) {
+                    int invertedRowIndex = (height - 1 - i) * width;
+                    int destRowBase = invertedRowIndex << 2;
+                    int rowBase = i * rowStride;
+
+                    buf.position(rowBase);
+                    buf.get(row, 0, Math.min(rowStride, buf.remaining()));
+
+                    for (int j = 0; j < width; j++) {
+                        int pixelOffset = j << 1;
+                        int pixel = (row[pixelOffset] & 0xFF) | ((row[pixelOffset + 1] & 0xFF) << 8);
+
+                        // RGB_565 拆分为 R/G/B
+                        int r5 = (pixel >> 11) & 0x1F;
+                        int g6 = (pixel >> 5) & 0x3F;
+                        int b5 = pixel & 0x1F;
+
+                        // 扩展为 8 位：高位复制到低位
+                        int r = (r5 << 3) | (r5 >> 2);
+                        int g = (g6 << 2) | (g6 >> 4);
+                        int b = (b5 << 3) | (b5 >> 2);
+
+                        int base = destRowBase + (j << 2);
+                        data[base]     = (byte) r;
+                        data[base + 1] = (byte) g;
+                        data[base + 2] = (byte) b;
+                        data[base + 3] = (byte) 255;
+                    }
+                }
+                buf.position(0);
+            } else if (planes.length >= 3) {
+                // YUV_420_888 格式
+                ByteBuffer yBuffer = planes[0].getBuffer();
+                ByteBuffer uBuffer = planes[1].getBuffer();
+                ByteBuffer vBuffer = planes[2].getBuffer();
+
+                int yRowStride = planes[0].getRowStride();
+                int uvRowStride = planes[1].getRowStride();
+                int uvPixelStride = planes[1].getPixelStride();
+
+                // 使用临时数组批量读取一行数据，减少 JNI get() 调用开销
+                byte[] yRow = new byte[width];
+                byte[] uRow = new byte[(width >> 1) + 1];
+                byte[] vRow = new byte[(width >> 1) + 1];
+
+                // 预计算 (channel-128)*coeff 的查找表（BT.601 整数近似）
+                final int[] lutVr = s_LutVr;
+                final int[] lutUg = s_LutUg;
+                final int[] lutVg = s_LutVg;
+                final int[] lutUb = s_LutUb;
+
+                for (int i = 0; i < height; i++) {
+                    int invertedRowIndex = (height - 1 - i) * width;
+                    int uvRowBase = (i >> 1) * uvRowStride;
+                    int yRowBase = i * yRowStride;
+                    int destRowBase = invertedRowIndex << 2;
+
+                    // 批量读取 Y 行
+                    yBuffer.position(yRowBase);
+                    yBuffer.get(yRow, 0, width);
+
+                    // 批量读取 UV 行（只在 i 为偶数时刷新，奇数行复用上一行的 UV）
+                    if ((i & 1) == 0) {
+                        int uvHalfWidth = (width >> 1) + 1;
+                        uBuffer.position(uvRowBase);
+                        uBuffer.get(uRow, 0, Math.min(uvHalfWidth, uBuffer.remaining()));
+                        vBuffer.position(uvRowBase);
+                        vBuffer.get(vRow, 0, Math.min(uvHalfWidth, vBuffer.remaining()));
+                    }
+
+                    // 主循环：一次处理 4 像素（循环展开）
+                    int j = 0;
+                    int w4 = width & ~3;
+                    for (; j < w4; j += 4) {
+                        int uvIdx0 = (j >> 1) * uvPixelStride;
+                        int uvIdx2 = ((j + 2) >> 1) * uvPixelStride;
+
+                        int u0 = uRow[uvIdx0] & 0xFF;
+                        int v0 = vRow[uvIdx0] & 0xFF;
+                        int u2 = uRow[uvIdx2] & 0xFF;
+                        int v2 = vRow[uvIdx2] & 0xFF;
+
+                        int vr0 = lutVr[v0], ug0 = lutUg[u0], vg0 = lutVg[v0], ub0 = lutUb[u0];
+                        int vr2 = lutVr[v2], ug2 = lutUg[u2], vg2 = lutVg[v2], ub2 = lutUb[u2];
+
+                        // 像素 0
+                        int y0 = yRow[j] & 0xFF;
+                        int base0 = destRowBase + (j << 2);
+                        data[base0]     = (byte) clamp255(y0 + vr0);
+                        data[base0 + 1] = (byte) clamp255(y0 - ug0 - vg0);
+                        data[base0 + 2] = (byte) clamp255(y0 + ub0);
+                        data[base0 + 3] = (byte) 255;
+
+                        // 像素 1
+                        int y1 = yRow[j + 1] & 0xFF;
+                        int base1 = destRowBase + ((j + 1) << 2);
+                        data[base1]     = (byte) clamp255(y1 + vr0);
+                        data[base1 + 1] = (byte) clamp255(y1 - ug0 - vg0);
+                        data[base1 + 2] = (byte) clamp255(y1 + ub0);
+                        data[base1 + 3] = (byte) 255;
+
+                        // 像素 2
+                        int y2 = yRow[j + 2] & 0xFF;
+                        int base2 = destRowBase + ((j + 2) << 2);
+                        data[base2]     = (byte) clamp255(y2 + vr2);
+                        data[base2 + 1] = (byte) clamp255(y2 - ug2 - vg2);
+                        data[base2 + 2] = (byte) clamp255(y2 + ub2);
+                        data[base2 + 3] = (byte) 255;
+
+                        // 像素 3
+                        int y3 = yRow[j + 3] & 0xFF;
+                        int base3 = destRowBase + ((j + 3) << 2);
+                        data[base3]     = (byte) clamp255(y3 + vr2);
+                        data[base3 + 1] = (byte) clamp255(y3 - ug2 - vg2);
+                        data[base3 + 2] = (byte) clamp255(y3 + ub2);
+                        data[base3 + 3] = (byte) 255;
+                    }
+
+                    // 尾部剩余像素（0~3 个）
+                    for (; j < width; j++) {
+                        int y = yRow[j] & 0xFF;
+                        int uvIdx = (j >> 1) * uvPixelStride;
+                        int u = uRow[uvIdx] & 0xFF;
+                        int v = vRow[uvIdx] & 0xFF;
+                        int base = destRowBase + (j << 2);
+                        data[base]     = (byte) clamp255(y + lutVr[v]);
+                        data[base + 1] = (byte) clamp255(y - lutUg[u] - lutVg[v]);
+                        data[base + 2] = (byte) clamp255(y + lutUb[u]);
+                        data[base + 3] = (byte) 255;
+                    }
+                }
+                yBuffer.position(0);
+                uBuffer.position(0);
+                vBuffer.position(0);
+            } else {
+                Log.e(TAG, "RenderImageVulkan: unsupported format 0x" + Integer.toHexString(format)
+                        + " with " + planes.length + " planes");
+                return;
+            }
+
+            // 更新纹理
+            mUnityTexture.updateTexture(width, height, data);
+
+            if (this.unityMessage != null)
+                this.unityMessage.OnVideoRenderEnd(this.m_nPlayIndex);
+        } catch (Exception e) {
+            Log.e(TAG, "RenderImageNoGL Exception: " + e.getMessage());
+        }
+    }
+
     void RenderImageNoGL(Image image) {
         try {
             int width = image.getWidth();
@@ -760,6 +1058,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     public void CreateExoSurface(int width, int height) {
         if (videoPlayer == null)
             return;
+
         try {
             // Log.d(TAG, "CreateExoSurface: Starting with " + width + "x" + height);
 
