@@ -922,10 +922,10 @@ namespace GameApp.Media
                 if(m_bResumeCall)
                 {
                     m_bResumeCall = false;
-                    // Resume 会销毁并重建 Java 侧全部 GL 资源，GL 可能复用相同的纹理 id，
-                    // 这里强制清空缓存，确保恢复后必定重新创建外部纹理，避免黑屏
-                    m_TextureHandle = 0;
-                    m_TextureRevision = -1;
+                    // Java 侧只有在检测到 EGL context 确实重建时才会递增 texture revision。
+                    // 普通 Activity 返回直接复用现有纹理，避免无条件重建造成黑帧。
+                    // Java 侧只有在检测到 EGL context 确实重建时才会递增 texture revision。
+                    // 普通 Activity 返回直接复用现有纹理，避免无条件重建造成黑帧。
                     GL.InvalidateState();
                     IssuePluginEvent(Native.ExoPlayerEvent.Resume, m_iPlayerIndex);
                     GL.InvalidateState();

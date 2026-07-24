@@ -68,6 +68,9 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     // Surface 生命周期回调可能在 Android 主线程执行，因此这里只设置失效标记，
     // 由下一次 Render 在渲染线程中真正销毁旧的 FBO/纹理。
     private volatile boolean m_GlResourcesInvalid = false;
+    // EGL context 重建后，即使 Render 已经消费了 m_GlResourcesInvalid，
+    // Resume 仍需要重建解码输出 surface；普通 Activity 返回不需要重建。
+    private volatile boolean m_NeedsSurfaceRecreationAfterContextReset = false;
 
     VideoPlayer videoPlayer;
     int m_nPlayIndex;
@@ -214,6 +217,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
             for (ExoPlayerUnity player : s_AllPlayers.values()) {
                 if (player != null) {
                     player.m_GlResourcesInvalid = true;
+                    player.m_NeedsSurfaceRecreationAfterContextReset = true;
                     player.m_TextureHandle = 0;
                     player.m_TextureRevision++;
                     player.mNewFrameAvailable = false;
@@ -341,6 +345,25 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     public void Resume() {
         if (videoPlayer == null)
             return;
+
+        // Activity 返回并不一定意味着 EGL context 已经丢失。若 context 仍然有效，
+        // 保留 ImageReader/SurfaceTexture 和 Unity 外部纹理，只恢复播放，避免产生一帧黑屏。
+        final boolean recreateSurface = m_NeedsSurfaceRecreationAfterContextReset;
+        m_NeedsSurfaceRecreationAfterContextReset = false;
+        if (!recreateSurface) {
+            getHandler().post(new Runnable() {
+                @Override
+                public void run() {
+                    if (videoPlayer != null) {
+                        videoPlayer.Play();
+                    }
+                }
+            });
+            Log.d(TAG, "Resume preserved existing surface and GL resources");
+            return;
+        }
+
+        Log.d(TAG, "Resume recreating surface after EGL context reset");
         DestroySurface();
         DestroyGl();
         mNewFrameAvailable = false;
@@ -835,6 +858,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         try {
             for (ExoPlayerUnity player : s_AllPlayers.values()) {
                 if (player != null) {
+                    player.m_NeedsSurfaceRecreationAfterContextReset = true;
                     player.DestroySurface();
                     player.DestroyGl();
                 }

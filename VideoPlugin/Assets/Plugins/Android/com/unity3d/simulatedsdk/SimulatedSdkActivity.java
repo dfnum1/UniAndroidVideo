@@ -193,6 +193,7 @@ public final class SimulatedSdkActivity extends Activity {
                 sendStage("Initialized", "SDK initialization complete");
                 setResult(RESULT_OK);
                 finish();
+                overridePendingTransition(0, 0);
             }
         }, loginDelayMs);
     }
@@ -209,6 +210,7 @@ public final class SimulatedSdkActivity extends Activity {
         sendStage("Failed", "Simulated SDK Activity closed by user");
         setResult(RESULT_CANCELED);
         finish();
+        overridePendingTransition(0, 0);
     }
 
     private void sendStage(String state, String message) {
