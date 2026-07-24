@@ -168,7 +168,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                 // ! 使用ImageReader模式
                 // ! 目前在mumu模拟器上开启了这个模式，其余的还是默认
                 Log.d(TAG, "RendererSetupPlayer Use ImageReader mode");
-                theClass.m_UseImageReader = true;
+           //     theClass.m_UseImageReader = true;
             }
 
            // if (isEmulator()) {
