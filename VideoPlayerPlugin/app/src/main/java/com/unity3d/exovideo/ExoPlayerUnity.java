@@ -64,6 +64,11 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
     // 需要靠 revision 变化强制重新 CreateExternalTexture，避免一直黑屏。
     int m_TextureRevision = 0;
 
+    // GL 对象只能在 Unity 渲染线程上创建/销毁。ImageReader 的尺寸变化和
+    // Surface 生命周期回调可能在 Android 主线程执行，因此这里只设置失效标记，
+    // 由下一次 Render 在渲染线程中真正销毁旧的 FBO/纹理。
+    private volatile boolean m_GlResourcesInvalid = false;
+
     VideoPlayer videoPlayer;
     int m_nPlayIndex;
 
@@ -200,6 +205,26 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         }
     }
 
+    // Unity EGL/GL context 重建后，旧的 Java GL 名称不能继续使用。
+    // 该回调只设置标记，不在 Android 主线程执行任何 GL 操作。
+    public static void OnGraphicsDeviceInitialize() {
+        if (s_AllPlayers == null)
+            return;
+        try {
+            for (ExoPlayerUnity player : s_AllPlayers.values()) {
+                if (player != null) {
+                    player.m_GlResourcesInvalid = true;
+                    player.m_TextureHandle = 0;
+                    player.m_TextureRevision++;
+                    player.mNewFrameAvailable = false;
+                    player.m_iNumberFramesAvailable = 0;
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "OnGraphicsDeviceInitialize Exception: " + e.getMessage());
+        }
+    }
+
     public void SetUnityCallback(IUnityMessage _unityMessage) {
         this.unityMessage = _unityMessage;
     }
@@ -275,7 +300,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
             CreateExoSurface(GetWidth(), GetHeight());
         }
 
-        // set up exoplayer on main thread
+        // 在投递到主线程之前捕获当前 Surface，避免执行时读到下一代 Surface。
         getHandler().post(new Runnable() {
             @Override
             public void run() {
@@ -298,12 +323,16 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         if (videoPlayer == null)
             return;
         // set up exoplayer on main thread
+        final Surface targetSurface;
+        synchronized (this) {
+            targetSurface = mySurface;
+        }
         getHandler().post(new Runnable() {
             @Override
             public void run() {
                 // videoPlayer 可能在 post 之后、run 执行前被置空，这里需要再次判空
                 if (videoPlayer != null) {
-                    videoPlayer.AttackSurface(mySurface);
+                    videoPlayer.AttackSurface(targetSurface);
                 }
             }
         });
@@ -322,14 +351,18 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
             public void run() {
                 // 对于ImageReader模式，mySurface已经在CreateExoSurface中设置
                 // 对于SurfaceTexture模式，重新创建Surface
+                Surface surfaceToAttach = null;
                 if (!m_UseImageReader && surfaceTexture != null) {
                     if (mySurface != null)
                         mySurface.release();
                     mySurface = new Surface(surfaceTexture);
+                    surfaceToAttach = mySurface;
+                } else if (m_UseImageReader) {
+                    surfaceToAttach = mySurface;
                 }
                 // 绑定表面到播放器
-                if (mySurface != null) {
-                    videoPlayer.AttackSurface(mySurface);
+                if (surfaceToAttach != null) {
+                    videoPlayer.AttackSurface(surfaceToAttach);
                 }
             }
         });
@@ -338,6 +371,12 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
 
     public void Render() {
         synchronized (this) {
+            // 必须在 Unity 渲染线程执行，不能从 Android 主线程的 Surface 回调中执行。
+            if (m_GlResourcesInvalid) {
+                DestroyGl();
+                m_GlResourcesInvalid = false;
+            }
+
             // Log.d(TAG, "Render: Starting");
 
             // 确保使用有效的尺寸
@@ -701,15 +740,22 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
         try {
             // Log.d(TAG, "CreateExoSurface: Starting with " + width + "x" + height);
 
-            // 先销毁旧的表面和GL资源
+            // Surface 可以在 Android 主线程重建，但 GL 资源不能在这里销毁。
+            // DestroyGl 延迟到下一次 Unity Render（渲染线程）执行。
             DestroySurface();
-            DestroyGl();
+            if (m_UseImageReader) {
+                m_GlResourcesInvalid = true;
+            } else {
+                // SurfaceTexture 模式的 CreateExoSurface 只从 Unity 渲染路径调用，
+                // 保持原有的同步 GL 资源重建行为。
+                DestroyGl();
+            }
 
             if (m_UseImageReader) {
                 // 使用ImageReader模式
                 // Log.d(TAG, "CreateExoSurface: Using ImageReader mode");
-                mVideImageReader = ImageReader.newInstance(width, height, m_ImageReaderFormat, 2);
-                mVideImageReader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
+                final ImageReader newImageReader = ImageReader.newInstance(width, height, m_ImageReaderFormat, 2);
+                newImageReader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
                     @Override
                     public void onImageAvailable(ImageReader reader) {
                         synchronized (ExoPlayerUnity.this) {
@@ -720,8 +766,11 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                         }
                     }
                 }, getHandler());
-                // 设置mySurface变量，以便AttackSurface方法使用
-                mySurface = mVideImageReader.getSurface();
+                synchronized (this) {
+                    mVideImageReader = newImageReader;
+                    // 设置mySurface变量，以便AttackSurface方法使用
+                    mySurface = newImageReader.getSurface();
+                }
                 Log.d(TAG, "CreateExoSurface with ImageReader " + width + "x" + height + ", surface=" + mySurface);
             } else {
                 // 使用SurfaceTexture模式
@@ -760,13 +809,17 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
             public void run() {
                 if (videoPlayer == null)
                     return;
+                Surface surfaceToAttach = null;
                 if (!m_UseImageReader && surfaceTexture != null) {
                     if (mySurface != null)
                         mySurface.release();
                     mySurface = new Surface(surfaceTexture);
+                    surfaceToAttach = mySurface;
+                } else if (m_UseImageReader) {
+                    surfaceToAttach = mySurface;
                 }
-                if (mySurface != null) {
-                    videoPlayer.AttackSurface(mySurface);
+                if (surfaceToAttach != null) {
+                    videoPlayer.AttackSurface(surfaceToAttach);
                 }
             }
         });
@@ -888,25 +941,49 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
 
         m_TextureHandle = 0;
         m_TextureRevision++;
+        m_GlResourcesInvalid = false;
+    }
+
+    // 在调用方已经拿到锁时使用；普通调用仍由 Render 的 synchronized 保护。
+    private void CaptureCurrentSurfaceAndAttach() {
+        final Surface targetSurface;
+        synchronized (this) {
+            targetSurface = mySurface;
+        }
+        getHandler().post(new Runnable() {
+            @Override
+            public void run() {
+                if (videoPlayer != null) {
+                    // 捕获调用时的 Surface，避免 Handler 执行时读取到下一代 Surface。
+                    videoPlayer.AttackSurface(targetSurface);
+                }
+            }
+        });
     }
 
     private void DestroySurface() {
         try {
          //   Log.d(TAG, "DestroySurface: Starting");
 
-            final Surface oldSurface = mySurface;
-            final SurfaceTexture oldSurfaceTexture = surfaceTexture;
-            final ImageReader oldImageReader = mVideImageReader;
+            final Surface oldSurface;
+            final SurfaceTexture oldSurfaceTexture;
+            final ImageReader oldImageReader;
             final VideoPlayer player = videoPlayer;
 
-            // Set fields to null immediately
-            mySurface = null;
-            surfaceTexture = null;
-            mVideImageReader = null;
+            synchronized (this) {
+                oldSurface = mySurface;
+                oldSurfaceTexture = surfaceTexture;
+                oldImageReader = mVideImageReader;
 
-            // Reset frame counters
-            m_iNumberFramesAvailable = 0;
-            mNewFrameAvailable = false;
+                // Set fields to null immediately
+                mySurface = null;
+                surfaceTexture = null;
+                mVideImageReader = null;
+
+                // Reset frame counters
+                m_iNumberFramesAvailable = 0;
+                mNewFrameAvailable = false;
+            }
 
             getHandler().post(new Runnable() {
                 @Override
@@ -1118,7 +1195,7 @@ public class ExoPlayerUnity implements SurfaceTexture.OnFrameAvailableListener {
                 if (m_UseImageReader) {
                     CreateExoSurface(width, height);
                     // 重新绑定表面到播放器
-                    AttackSurface();
+                    CaptureCurrentSurfaceAndAttach();
                 } else if (surfaceTexture != null) {
                     // 对于SurfaceTexture模式，更新缓冲区大小
                     surfaceTexture.setDefaultBufferSize(width, height);

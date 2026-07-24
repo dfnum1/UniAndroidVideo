@@ -99,6 +99,31 @@ static jclass findClass(const char* name)
     return static_cast<jclass>(getEnv()->CallObjectMethod(gClassLoader, gFindClassMethod, getEnv()->NewStringUTF(name)));
 }
 
+static void NotifyJavaGraphicsEvent(const char* methodName)
+{
+    JNIEnv* env = getEnv();
+    if (env == nullptr || gClassLoader == nullptr || gFindClassMethod == nullptr)
+        return;
+
+    jclass cls = findClass("com.unity3d.exovideo.ExoPlayerUnity");
+    if (cls == nullptr)
+    {
+        if (env->ExceptionCheck())
+            env->ExceptionClear();
+        return;
+    }
+
+    jmethodID method = env->GetStaticMethodID(cls, methodName, "()V");
+    if (method != nullptr)
+        env->CallStaticVoidMethod(cls, method);
+
+    env->DeleteLocalRef(cls);
+
+    // JNI 查找失败不应污染后续渲染线程调用。
+    if (env->ExceptionCheck())
+        env->ExceptionClear();
+}
+
 static void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType eventType);
 
 static IUnityInterfaces* s_UnityInterfaces = NULL;
@@ -111,6 +136,9 @@ static void UNITY_INTERFACE_API OnGraphicsDeviceEvent(UnityGfxDeviceEventType ev
     if (eventType == kUnityGfxDeviceEventInitialize)
     {
         s_DeviceType = s_Graphics->GetRenderer();
+        // 通知 Java 侧：旧 EGL context 中的 GL 名称不能继续使用，
+        // 由下一次 Unity Render 在正确线程中重建资源。
+        NotifyJavaGraphicsEvent("OnGraphicsDeviceInitialize");
     }
     else if (eventType == kUnityGfxDeviceEventShutdown)
     {

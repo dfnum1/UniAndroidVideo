@@ -231,7 +231,13 @@ public class Texture2DExtYUV extends Texture2DExt {
 
                 // 恢复之前的OpenGL状态
                 GLES20.glActiveTexture(lastActiveTexture[0]);
-                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, lastTexture[0]);
+                // EGL context 重建后，旧 context 的纹理名称可能已经失效。
+                // 不要把失效的纹理 ID 再绑定回去，否则 MuMu 会返回 GL_INVALID_OPERATION。
+                int textureToRestore = lastTexture[0];
+                if (textureToRestore != 0 && !GLES20.glIsTexture(textureToRestore)) {
+                        textureToRestore = 0;
+                }
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureToRestore);
                 GLES20.glUseProgram(lastProgram[0]);
         }
 
@@ -403,7 +409,11 @@ public class Texture2DExtYUV extends Texture2DExt {
                         GLES20.glEnable(GLES20.GL_SCISSOR_TEST);
 
                 GLES20.glActiveTexture(lastActiveTexture[0]);
-                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, lastTexture[0]);
+                int textureToRestore = lastTexture[0];
+                if (textureToRestore != 0 && !GLES20.glIsTexture(textureToRestore)) {
+                        textureToRestore = 0;
+                }
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureToRestore);
                 GLES20.glUseProgram(lastProgram[0]);
         }
 

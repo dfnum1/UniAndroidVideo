@@ -926,22 +926,32 @@ namespace GameApp.Media
                     // 这里强制清空缓存，确保恢复后必定重新创建外部纹理，避免黑屏
                     m_TextureHandle = 0;
                     m_TextureRevision = -1;
+                    GL.InvalidateState();
                     IssuePluginEvent(Native.ExoPlayerEvent.Resume, m_iPlayerIndex);
+                    GL.InvalidateState();
                     return;
                 }
-				if (m_UseFastOesPath)
-				{
-					// This is needed for at least Unity 5.5.0, otherwise it just renders black in OES mode
-					GL.InvalidateState();
-				}
-               // m_Video.Call<bool>("Render");
 
-                IssuePluginEvent(Native.ExoPlayerEvent.Render, m_iPlayerIndex);
-
-                if(m_UseFastOesPath)
+                // Java 插件会在 Unity 渲染线程修改 GL 状态。即使不是 OES 快速路径，
+                // ImageReader + FBO 路径也必须让 Unity 丢弃缓存的绑定状态。
+                int revisionBeforeRender = m_Video.Call<int>("GetTextureRevision");
+                if (revisionBeforeRender != m_TextureRevision)
                 {
-                    GL.InvalidateState();
+                    if (m_Texture != null)
+                    {
+                        UnityEngine.Object.Destroy(m_Texture);
+                        m_Texture = null;
+                    }
+                    m_TextureHandle = 0;
+                    m_TextureRevision = -1;
+                    // 等 Java 在本次 Render 中创建出新目标纹理后再重新包装。
+                    m_TextureRevision = -1;
                 }
+                // m_Video.Call<bool>("Render");
+
+                GL.InvalidateState();
+                IssuePluginEvent(Native.ExoPlayerEvent.Render, m_iPlayerIndex);
+                GL.InvalidateState();
 
 				// Check if we can create the texture
                 // Scan for a change in resolution
