@@ -28,6 +28,8 @@ namespace GameApp.VideoTest
         [SerializeField] private float m_LoginPageDelay = 8.0f;
         [SerializeField] private float m_LoginDelay = 1.0f;
         [SerializeField] private bool m_UseAndroidActivity = true;
+        [Tooltip("Use an in-process Android overlay instead of launching a second Activity. This keeps Unity rendering active, but does not test Activity lifecycle transitions.")]
+        [SerializeField] private bool m_UseNonBlockingOverlay = false;
 
         [Header("Optional video recovery test")]
         [Tooltip("可拖入包含 ExoMediaPlayer 的对象；这里只通过 SendMessage 调用 Pause/Play，避免依赖 Android 专用类型。")]
@@ -46,6 +48,11 @@ namespace GameApp.VideoTest
         public float ElapsedSeconds => State == SimulationState.Idle
             ? 0.0f
             : Time.realtimeSinceStartup - m_SimulationStartTime;
+
+        public bool UseNonBlockingOverlay
+        {
+            set { m_UseNonBlockingOverlay = value; }
+        }
 
         private void Awake()
         {
@@ -86,32 +93,54 @@ namespace GameApp.VideoTest
             SetState(SimulationState.Initializing, "StartGlobalSdk / wait before simulated SDK popup");
             yield return WaitRealtime(m_LoginPageDelay);
 
-            BeginAndroidActivitySimulation();
+            BeginAndroidSdkSimulation();
             m_SimulationCoroutine = null;
         }
 
-        private void BeginAndroidActivitySimulation()
+        private void BeginAndroidSdkSimulation()
         {
-            SetState(SimulationState.ShowingAgreement, "launch simulated SDK Activity / login page");
+            string launchMode = m_UseNonBlockingOverlay
+                ? "launch simulated SDK non-blocking overlay / login page"
+                : "launch simulated SDK Activity / login page";
+            SetState(SimulationState.ShowingAgreement, launchMode);
 
             try
             {
                 using (AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
                 using (AndroidJavaObject currentActivity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
-                using (AndroidJavaClass activityClass = new AndroidJavaClass("com.unity3d.simulatedsdk.SimulatedSdkActivity"))
                 {
-                    activityClass.CallStatic(
-                        "Launch",
-                        currentActivity,
-                        gameObject.name,
-                        nameof(OnAndroidActivityStage),
-                        0L,
-                        (long)(Mathf.Max(0.0f, m_LoginDelay) * 1000.0f));
+                    long loginDelayMs = (long)(Mathf.Max(0.0f, m_LoginDelay) * 1000.0f);
+
+                    if (m_UseNonBlockingOverlay)
+                    {
+                        using (AndroidJavaClass overlayClass = new AndroidJavaClass("com.unity3d.simulatedsdk.SimulatedSdkOverlay"))
+                        {
+                            overlayClass.CallStatic(
+                                "Show",
+                                currentActivity,
+                                gameObject.name,
+                                nameof(OnAndroidActivityStage),
+                                loginDelayMs);
+                        }
+                    }
+                    else
+                    {
+                        using (AndroidJavaClass activityClass = new AndroidJavaClass("com.unity3d.simulatedsdk.SimulatedSdkActivity"))
+                        {
+                            activityClass.CallStatic(
+                                "Launch",
+                                currentActivity,
+                                gameObject.name,
+                                nameof(OnAndroidActivityStage),
+                                0L,
+                                loginDelayMs);
+                        }
+                    }
                 }
             }
             catch (System.Exception exception)
             {
-                SetState(SimulationState.Failed, "Unable to launch simulated SDK Activity: " + exception.Message);
+                SetState(SimulationState.Failed, "Unable to launch simulated SDK UI: " + exception.Message);
                 Debug.LogException(exception, this);
             }
         }

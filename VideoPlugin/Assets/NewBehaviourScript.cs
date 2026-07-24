@@ -9,6 +9,10 @@ public class NewBehaviourScript : MonoBehaviour
     public Slider seekProcess;
     public UIVideo seekVideo;
 
+    public GameApp.VideoTest.SimulatedSdkInitializer sdkInitializer;
+    public Toggle overlayMode;
+
+
     public Toggle[] toggles;
     public Dropdown viewModeDropdown;
 
@@ -85,6 +89,9 @@ public class NewBehaviourScript : MonoBehaviour
         }
         if (viewModeDropdown)
             KeylightEffect.ViewModeType = (GameApp.UIComponent.ViewMode)viewModeDropdown.value;
+
+        if (sdkInitializer)
+            sdkInitializer.UseNonBlockingOverlay = overlayMode.isOn;
     }
 
     public void Stop()
