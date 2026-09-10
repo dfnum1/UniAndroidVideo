@@ -93,6 +93,14 @@ namespace GameApp.Media
         private bool m_WasPlayingOnPause = false;
         private Coroutine _renderingCoroutine = null;
 
+        // 渲染线程 Prepare 事件到达后置下的脏标记。
+        // 渲染线程（OnRenderEvent 的 case Prepare）绝不直接做 JNI 调用，
+        // 只负责置脏标记；真正的播放器控制（SetLooping/Play/Seek）统一
+        // 在主线程 Update 中按序执行，避免渲染线程与主线程跨线程竞争
+        // 导致 ExoPlayer 状态机异常 → 托管异常穿透 native 边界 → abort（crash.txt）。
+        private bool m_DirtyLoop = false;      // 待应用循环设置
+        private float m_DirtySeek = -1;        // 待应用 seek（-1 表示无）
+
         // Event state
         private bool m_EventFired_ReadyToPlay = false;
         private bool m_EventFired_Started = false;
@@ -415,6 +423,10 @@ namespace GameApp.Media
             m_Height = 0;
 
             m_fSeekTime=-1;
+
+            // 重置渲染线程 Prepare 置下的脏标记，避免残留到下次打开视频。
+            m_DirtyLoop = false;
+            m_DirtySeek = -1;
 
             m_AutoStart = false;
 
@@ -1060,11 +1072,15 @@ namespace GameApp.Media
             {
                 case Native.ExoPlayerEvent.Prepare:
                     {
-                  //      Debug.Log("PrepareSurface");
-                        //m_Video.Call("AttackSurface");
-                        SetLooping(m_bVideoLoop);
-                        if(m_AutoStart) Play();
-                        if(m_fSeekTime>0)Seek(m_fSeekTime);
+                        // 渲染线程回调：绝不能在此执行任何播放器控制的 JNI 调用。
+                        // 渲染线程与主线程并发，且此刻主线程 ExoPlayer 尚在 prepare()/
+                        // setPlayWhenReady 初始化解码器（OMX/MediaCodec surface 尚未就绪）。
+                        // 若渲染线程此刻调用 AndroidJavaObject.Call，与主线程竞争会破坏
+                        // ExoPlayer 状态机，Java 侧抛出的异常经 JNI 回传为托管异常，
+                        // 被 IL2CPP 包裹成 Il2CppExceptionWrapper 穿透 native 边界 → abort。
+                        // 因此这里只置脏标记，真实控制（循环/播放/seek）统一在主线程 Update 处理。
+                        m_DirtyLoop = true;
+                        m_DirtySeek = m_fSeekTime;
                     }
                     break;
                 case Native.ExoPlayerEvent.Render:
@@ -1106,6 +1122,21 @@ namespace GameApp.Media
 		{
 			if (m_Video != null)
 			{
+                // 应用渲染线程 Prepare 事件置下的脏标记（主线程、串行执行 JNI）。
+                // 渲染线程只允许置标记，播放器控制必须回到主线程，经 Java getHandler().post
+                // 串行执行，避免与 ExoPlayer 初始化竞争导致崩溃。
+                if (m_DirtyLoop)
+                {
+                    SetLooping(m_bVideoLoop);
+                    m_DirtyLoop = false;
+                }
+                // 延迟 seek：需等时长就绪（GetDurationMs()>0）才真正执行，未就绪则下一帧重试。
+                if (m_DirtySeek > 0 && GetDurationMs() > 0)
+                {
+                    Seek(m_DirtySeek);
+                    m_DirtySeek = -1;
+                }
+
                 if (m_VideoOpened && m_AutoStart && !m_AutoStartTriggered && CanPlay())
                 {
                     m_AutoStartTriggered = true;
