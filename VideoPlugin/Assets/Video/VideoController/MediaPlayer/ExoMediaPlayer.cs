@@ -1081,6 +1081,7 @@ namespace GameApp.Media
                         // 因此这里只置脏标记，真实控制（循环/播放/seek）统一在主线程 Update 处理。
                         m_DirtyLoop = true;
                         m_DirtySeek = m_fSeekTime;
+						if (m_AutoStart) Play();
                     }
                     break;
                 case Native.ExoPlayerEvent.Render:
